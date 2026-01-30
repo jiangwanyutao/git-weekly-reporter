@@ -151,19 +151,19 @@ export default function HistoryPage() {
                         </div>
                         {!report.status && <span className="flex h-2 w-2 rounded-full bg-blue-600" />}
                       </div>
-                      <div className="ml-auto text-xs text-muted-foreground">
+                      <div className={cn("ml-auto text-xs group-hover:text-accent-foreground", selectedReport?.id === report.id ? "text-accent-foreground" : "text-muted-foreground")}>
                         {dayjs(report.createdAt).fromNow()}
                       </div>
                     </div>
-                    <div className={cn("text-xs font-medium", selectedReport?.id === report.id ? "text-foreground" : "text-muted-foreground")}>
+                    <div className={cn("text-xs font-medium group-hover:text-accent-foreground", selectedReport?.id === report.id ? "text-accent-foreground" : "text-muted-foreground")}>
                       范围: {dayjs(report.dateRange.start).format('MM/DD')} - {dayjs(report.dateRange.end).format('MM/DD')}
                     </div>
                   </div>
-                  <div className="line-clamp-2 text-xs w-full text-muted-foreground">
+                  <div className={cn("line-clamp-2 text-xs w-full group-hover:text-accent-foreground", selectedReport?.id === report.id ? "text-accent-foreground" : "text-muted-foreground")}>
                     {report.content.substring(0, 100)}...
                   </div>
                   <div className="flex items-center gap-2 mt-1">
-                    <Badge variant="outline" className="text-[10px] px-1 py-0">
+                    <Badge variant="outline" className="text-[10px] px-1 py-0 text-accent-foreground">
                       {report.content.length} 字
                     </Badge>
                   </div>
