@@ -149,14 +149,14 @@ export default function Dashboard() {
       await new Promise(r => setTimeout(r, 500));
 
       setAgentSteps(prev => prev.map(s => s.id === analysisStepId ? {
-          ...s,
-          tools: [{
-              id: 'tool-read-pkg',
-              name: 'read_file',
-              input: { path: 'package.json' },
-              output: 'Reading...',
-              state: 'running'
-          }]
+        ...s,
+        tools: [{
+          id: 'tool-read-pkg',
+          name: 'read_file',
+          input: { path: 'package.json' },
+          output: 'Reading...',
+          state: 'running'
+        }]
       } : s));
 
       // 获取项目上下文 (Agent 能力)
@@ -166,20 +166,20 @@ export default function Dashboard() {
         projectContext = contexts.join('\n');
 
         setAgentSteps(prev => prev.map(s => s.id === analysisStepId ? {
-            ...s,
-            status: 'completed',
-            details: `Analyzed ${projects.length} projects.`,
-            tools: [{
-                id: 'tool-read-pkg',
-                name: 'read_file',
-                input: { path: 'package.json/README.md' },
-                output: { summary: 'Context extracted successfully' },
-                state: 'completed'
-            }]
+          ...s,
+          status: 'completed',
+          details: `Analyzed ${projects.length} projects.`,
+          tools: [{
+            id: 'tool-read-pkg',
+            name: 'read_file',
+            input: { path: 'package.json/README.md' },
+            output: { summary: 'Context extracted successfully' },
+            state: 'completed'
+          }]
         } : s));
       } catch (e) {
         console.warn("Failed to fetch project context", e);
-         setAgentSteps(prev => prev.map(s => s.id === analysisStepId ? { ...s, status: 'failed' } : s));
+        setAgentSteps(prev => prev.map(s => s.id === analysisStepId ? { ...s, status: 'failed' } : s));
       }
 
       // Step 3: Git History
@@ -199,15 +199,15 @@ export default function Dashboard() {
       await new Promise(r => setTimeout(r, 600));
 
       setAgentSteps(prev => prev.map(s => s.id === gitStepId ? {
-          ...s,
-          status: 'completed',
-          tools: [{
-              id: 'tool-git-log',
-              name: 'git_log',
-              input: { since: dateRange?.from, until: dateRange?.to },
-              output: { count: logs.length },
-              state: 'completed'
-          }]
+        ...s,
+        status: 'completed',
+        tools: [{
+          id: 'tool-git-log',
+          name: 'git_log',
+          input: { since: dateRange?.from, until: dateRange?.to },
+          output: { count: logs.length },
+          state: 'completed'
+        }]
       } : s));
 
       // Step 4: Report Generation
@@ -259,9 +259,9 @@ export default function Dashboard() {
       } else {
         toast({ title: "生成失败", description: error.message, variant: "destructive" });
         setAgentSteps(prev => {
-            const last = prev[prev.length - 1];
-            if (last) return prev.map(s => s.id === last.id ? { ...s, status: 'failed' } : s);
-            return prev;
+          const last = prev[prev.length - 1];
+          if (last) return prev.map(s => s.id === last.id ? { ...s, status: 'failed' } : s);
+          return prev;
         });
       }
     } finally {
@@ -307,23 +307,23 @@ export default function Dashboard() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">工作周报助手</h1>
           <div className="flex items-center gap-2 mt-1">
-             <span className="text-muted-foreground text-sm">当前监听 {projects.length} 个项目，作者筛选:</span>
-             <Select
-               value={settings.authorName || 'all'}
-               onValueChange={(val) => {
-                 updateSettings({ ...settings, authorName: val === 'all' ? '' : val });
-               }}
-             >
-               <SelectTrigger className="w-[180px] h-8 text-xs">
-                 <SelectValue placeholder="全部作者" />
-               </SelectTrigger>
-               <SelectContent>
-                 <SelectItem value="all">全部作者</SelectItem>
-                 {authors.map(a => (
-                   <SelectItem key={a} value={a}>{a}</SelectItem>
-                 ))}
-               </SelectContent>
-             </Select>
+            <span className="text-muted-foreground text-sm">当前监听 {projects.length} 个项目，作者筛选:</span>
+            <Select
+              value={settings.authorName || 'all'}
+              onValueChange={(val) => {
+                updateSettings({ ...settings, authorName: val === 'all' ? '' : val });
+              }}
+            >
+              <SelectTrigger className="w-[180px] h-8 text-xs">
+                <SelectValue placeholder="全部作者" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部作者</SelectItem>
+                {authors.map(a => (
+                  <SelectItem key={a} value={a}>{a}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
         <div className="flex gap-2 items-center">
@@ -349,7 +349,7 @@ export default function Dashboard() {
       </div>
 
       <div className="flex-1 min-h-0">
-        <ResizablePanelGroup direction="horizontal" className="h-full rounded-lg border">
+        <ResizablePanelGroup className="h-full rounded-lg border">
           {/* 左侧：提交记录列表 (按项目分组) */}
           <ResizablePanel defaultSize={40} minSize={30}>
             <div className="h-full flex flex-col p-2">
@@ -380,12 +380,12 @@ export default function Dashboard() {
                               <div className="space-y-1">
                                 {projectLogs.map((log) => (
                                   <div key={log.hash} className="text-sm p-2 hover:bg-accent hover:text-accent-foreground rounded-md transition-colors group">
-                                     <div className="flex justify-between items-start gap-2">
-                                       <span className="font-medium break-all">{log.message}</span>
-                                       <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0 opacity-70 group-hover:text-accent-foreground group-hover:opacity-100">
-                                         {dayjs(log.date).format('MM-DD HH:mm')}
-                                       </span>
-                                     </div>
+                                    <div className="flex justify-between items-start gap-2">
+                                      <span className="font-medium break-all">{log.message}</span>
+                                      <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0 opacity-70 group-hover:text-accent-foreground group-hover:opacity-100">
+                                        {dayjs(log.date).format('MM-DD HH:mm')}
+                                      </span>
+                                    </div>
                                   </div>
                                 ))}
                               </div>
@@ -423,34 +423,34 @@ export default function Dashboard() {
                         <div className="space-y-4 mb-4">
                           {agentSteps.map(step => (
                             <Task key={step.id} defaultOpen={step.status === 'running' || step.status === 'failed'}>
-                               <TaskTrigger title={step.title} className="w-full">
-                                 <div className="flex items-center gap-2">
-                                   {step.status === 'running' && <Loader2 className="h-4 w-4 animate-spin text-blue-500" />}
-                                   {step.status === 'completed' && <CheckCircle2 className="h-4 w-4 text-green-500" />}
-                                   {step.status === 'failed' && <Circle className="h-4 w-4 text-red-500" />}
-                                   {step.status === 'pending' && <Circle className="h-4 w-4 text-muted-foreground" />}
-                                   <span>{step.title}</span>
-                                 </div>
-                               </TaskTrigger>
-                               <TaskContent>
-                                 {step.details && <p className="text-muted-foreground mb-2 text-xs">{step.details}</p>}
-                                 {step.tools?.map(tool => (
-                                   <Tool key={tool.id} className="mb-2">
-                                     <ToolHeader
-                                       type="function"
-                                       toolName={tool.name}
-                                       state={tool.state}
-                                     />
-                                     <ToolContent>
-                                       <ToolInput input={tool.input} />
-                                       <ToolOutput
-                                         output={JSON.stringify(tool.output, null, 2)}
-                                         errorText={tool.state === 'failed' ? 'Tool execution failed' : undefined}
-                                       />
-                                     </ToolContent>
-                                   </Tool>
-                                 ))}
-                               </TaskContent>
+                              <TaskTrigger title={step.title} className="w-full">
+                                <div className="flex items-center gap-2">
+                                  {step.status === 'running' && <Loader2 className="h-4 w-4 animate-spin text-blue-500" />}
+                                  {step.status === 'completed' && <CheckCircle2 className="h-4 w-4 text-green-500" />}
+                                  {step.status === 'failed' && <Circle className="h-4 w-4 text-red-500" />}
+                                  {step.status === 'pending' && <Circle className="h-4 w-4 text-muted-foreground" />}
+                                  <span>{step.title}</span>
+                                </div>
+                              </TaskTrigger>
+                              <TaskContent>
+                                {step.details && <p className="text-muted-foreground mb-2 text-xs">{step.details}</p>}
+                                {step.tools?.map(tool => (
+                                  <Tool key={tool.id} className="mb-2">
+                                    <ToolHeader
+                                      type="function"
+                                      toolName={tool.name}
+                                      state={tool.state}
+                                    />
+                                    <ToolContent>
+                                      <ToolInput input={tool.input} />
+                                      <ToolOutput
+                                        output={JSON.stringify(tool.output, null, 2)}
+                                        errorText={tool.state === 'failed' ? 'Tool execution failed' : undefined}
+                                      />
+                                    </ToolContent>
+                                  </Tool>
+                                ))}
+                              </TaskContent>
                             </Task>
                           ))}
                         </div>
