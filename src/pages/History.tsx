@@ -21,11 +21,6 @@ import { Badge } from "@/components/ui/badge"
 import { DatePickerWithRange } from '@/components/ui/date-range-picker';
 import { DateRange } from "react-day-picker";
 import { cn } from "@/lib/utils"
-import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-} from "@/components/ui/resizable"
 
 export default function HistoryPage() {
   const { reports, deleteReport } = useAppStore();
@@ -80,7 +75,7 @@ export default function HistoryPage() {
       // 1. 搜索过滤
       const matchesSearch = searchQuery
         ? report.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          dayjs(report.createdAt).format('YYYY-MM-DD').includes(searchQuery)
+        dayjs(report.createdAt).format('YYYY-MM-DD').includes(searchQuery)
         : true;
 
       // 2. 日期范围过滤 (基于生成时间)
@@ -99,161 +94,144 @@ export default function HistoryPage() {
 
   const selectedReport = useMemo(() =>
     reports.find(r => r.id === selectedId) || filteredReports[0] || null,
-  [reports, selectedId, filteredReports]);
-
-  // 确保选中项有效
-  if (selectedReport && selectedId !== selectedReport.id && filteredReports.includes(selectedReport)) {
-    // 自动选中第一个，或者保持当前选中
-    // 这里我们只是为了让 UI 响应，不需要额外副作用，渲染时直接用 selectedReport
-  }
+    [reports, selectedId, filteredReports]);
 
   return (
-    <div className="h-full flex flex-col overflow-hidden p-4">
-      <ResizablePanelGroup direction="horizontal" className="h-full w-full rounded-lg border">
-        {/* 左侧列表面板 */}
-        <ResizablePanel defaultSize={30} minSize={20} maxSize={50}>
-          <div className="h-full flex flex-col bg-background">
-            <div className="p-4 space-y-4 border-b">
-              <div className="flex items-center justify-between">
-                 <h1 className="text-xl font-bold">历史周报</h1>
-                 <div className="flex items-center gap-2">
-                   <Badge variant="secondary">{filteredReports.length} 份</Badge>
-                   <Button variant="outline" size="icon" className="h-6 w-6" onClick={handleExportAll} title="导出当前列表">
-                     <Download className="h-3.5 w-3.5" />
-                   </Button>
-                 </div>
+    <div className="flex-1 p-4 h-full flex overflow-hidden gap-4">
+      {/* 左侧列表面板 */}
+      <div className="w-[320px] shrink-0 flex flex-col border rounded-lg bg-background overflow-hidden">
+        <div className="p-4 space-y-4 border-b shrink-0">
+          <div className="flex items-center justify-between">
+            <h1 className="text-xl font-bold">历史周报</h1>
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary">{filteredReports.length} 份</Badge>
+              <Button variant="outline" size="icon" className="h-6 w-6" onClick={handleExportAll} title="导出当前列表">
+                <Download className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Input
+              placeholder="搜索周报内容..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="h-8"
+            />
+            <div className="flex">
+              <DatePickerWithRange
+                className="w-full [&>button]:w-full"
+                date={dateRange}
+                setDate={setDateRange}
+              />
+            </div>
+          </div>
+        </div>
+
+        <ScrollArea className="flex-1">
+          <div className="flex flex-col gap-2 p-4">
+            {filteredReports.length === 0 ? (
+              <div className="text-center text-muted-foreground py-8 text-sm">
+                没有找到相关周报
               </div>
-              <div className="space-y-2">
-                 <Input
-                   placeholder="搜索周报内容..."
-                   value={searchQuery}
-                   onChange={(e) => setSearchQuery(e.target.value)}
-                   className="h-8"
-                 />
-                 <div className="flex">
-                    <DatePickerWithRange
-                      className="w-full [&>button]:w-full"
-                      date={dateRange}
-                      setDate={setDateRange}
-                    />
-                 </div>
+            ) : (
+              filteredReports.map((report) => (
+                <button
+                  key={report.id}
+                  className={cn(
+                    "flex flex-col items-start gap-2 rounded-lg border p-3 text-left text-sm transition-all hover:bg-accent hover:text-accent-foreground group",
+                    selectedReport?.id === report.id ? "bg-accent text-accent-foreground" : "bg-card"
+                  )}
+                  onClick={() => setSelectedId(report.id)}
+                >
+                  <div className="flex w-full flex-col gap-1">
+                    <div className="flex items-center">
+                      <div className="flex items-center gap-2">
+                        <div className="font-semibold">
+                          {dayjs(report.createdAt).format('YYYY年MM月DD日')}
+                        </div>
+                        {!report.status && <span className="flex h-2 w-2 rounded-full bg-blue-600" />}
+                      </div>
+                      <div className="ml-auto text-xs text-muted-foreground">
+                        {dayjs(report.createdAt).fromNow()}
+                      </div>
+                    </div>
+                    <div className={cn("text-xs font-medium", selectedReport?.id === report.id ? "text-foreground" : "text-muted-foreground")}>
+                      范围: {dayjs(report.dateRange.start).format('MM/DD')} - {dayjs(report.dateRange.end).format('MM/DD')}
+                    </div>
+                  </div>
+                  <div className="line-clamp-2 text-xs w-full text-muted-foreground">
+                    {report.content.substring(0, 100)}...
+                  </div>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Badge variant="outline" className="text-[10px] px-1 py-0">
+                      {report.content.length} 字
+                    </Badge>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </ScrollArea>
+      </div>
+
+      {/* 右侧详情面板 */}
+      <div className="flex-1 flex flex-col min-w-0 border rounded-lg bg-background overflow-hidden">
+        {selectedReport ? (
+          <div className="h-full flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b shrink-0">
+              <div className="flex flex-col gap-1">
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-primary" />
+                  周报详情
+                </h2>
+              </div>
+              <div className="text-sm text-muted-foreground flex items-center gap-4">
+                <span className="flex items-center gap-1">
+                  <Calendar className="h-3.5 w-3.5" />
+                  生成于 {dayjs(selectedReport.createdAt).format('YYYY-MM-DD HH:mm')}
+                </span>
+                <span>
+                  覆盖: {dayjs(selectedReport.dateRange.start).format('YYYY-MM-DD')} 至 {dayjs(selectedReport.dateRange.end).format('YYYY-MM-DD')}
+                </span>
               </div>
             </div>
-
-            <ScrollArea className="flex-1">
-              <div className="flex flex-col gap-2 p-4 pt-0 mt-4">
-                {filteredReports.length === 0 ? (
-                  <div className="text-center text-muted-foreground py-8 text-sm">
-                    没有找到相关周报
-                  </div>
+            <div className="flex items-center gap-2 px-4 py-2 border-b shrink-0">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleCopy(selectedReport.content, selectedReport.id)}
+              >
+                {copiedId === selectedReport.id ? (
+                  <Check className="mr-2 h-4 w-4 text-green-500" />
                 ) : (
-                  filteredReports.map((report) => (
-                    <button
-                      key={report.id}
-                      className={cn(
-                        "flex flex-col items-start gap-2 rounded-lg border p-3 text-left text-sm transition-all hover:bg-accent hover:text-accent-foreground group",
-                        selectedReport?.id === report.id ? "bg-accent text-accent-foreground" : "bg-card"
-                      )}
-                      onClick={() => setSelectedId(report.id)}
-                    >
-                      <div className="flex w-full flex-col gap-1">
-                        <div className="flex items-center">
-                          <div className="flex items-center gap-2">
-                            <div className="font-semibold">
-                              {dayjs(report.createdAt).format('YYYY年MM月DD日')}
-                            </div>
-                            {!report.status && <span className="flex h-2 w-2 rounded-full bg-blue-600" />}
-                          </div>
-                          <div className={cn(
-                            "ml-auto text-xs transition-colors",
-                            selectedReport?.id === report.id ? "text-muted-foreground" : "text-muted-foreground"
-                          )}>
-                            {dayjs(report.createdAt).fromNow()}
-                          </div>
-                        </div>
-                        <div className={cn("text-xs font-medium transition-colors", selectedReport?.id === report.id ? "text-foreground" : "text-muted-foreground")}>
-                          范围: {dayjs(report.dateRange.start).format('MM/DD')} - {dayjs(report.dateRange.end).format('MM/DD')}
-                        </div>
-                      </div>
-                      <div className={cn("line-clamp-2 text-xs w-full transition-colors", selectedReport?.id === report.id ? "text-muted-foreground" : "text-muted-foreground")}>
-                        {report.content.substring(0, 100)}...
-                      </div>
-                      <div className="flex items-center gap-2 mt-1">
-                        <Badge variant="outline" className={cn("text-[10px] px-1 py-0 transition-colors", selectedReport?.id === report.id ? "border-border" : "border-border")}>
-                          {report.content.length} 字
-                        </Badge>
-                      </div>
-                    </button>
-                  ))
+                  <Copy className="mr-2 h-4 w-4" />
                 )}
+                复制
+              </Button>
+              <Separator orientation="vertical" className="mx-1 h-6" />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-destructive hover:text-destructive/90"
+                onClick={() => handleDelete(selectedReport.id)}
+                title="删除"
+              >
+                <Trash2 className="h-5 w-5" />
+              </Button>
+            </div>
+            <ScrollArea className="flex-1">
+              <div className="prose prose-sm dark:prose-invert max-w-none p-6">
+                <ReactMarkdown>{selectedReport.content}</ReactMarkdown>
               </div>
             </ScrollArea>
           </div>
-        </ResizablePanel>
-
-        <ResizableHandle withHandle />
-
-        {/* 右侧详情面板 */}
-        <ResizablePanel defaultSize={70}>
-          <div className="h-full flex flex-col min-w-0 bg-background">
-            {selectedReport ? (
-              <div className="h-full flex flex-col">
-                <div className="flex items-center justify-between p-4 border-b h-[116px]">
-                  <div className="flex flex-col gap-1">
-                    <h2 className="text-lg font-semibold flex items-center gap-2">
-                      <FileText className="h-5 w-5 text-primary" />
-                      周报详情
-                    </h2>
-                  </div>
-                  <div className="text-sm text-muted-foreground flex items-center gap-4">
-                    <span className="flex items-center gap-1">
-                      <Calendar className="h-3.5 w-3.5" />
-                      生成于 {dayjs(selectedReport.createdAt).format('YYYY-MM-DD HH:mm')}
-                    </span>
-                    <span>
-                      覆盖: {dayjs(selectedReport.dateRange.start).format('YYYY-MM-DD')} 至 {dayjs(selectedReport.dateRange.end).format('YYYY-MM-DD')}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 px-4 py-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleCopy(selectedReport.content, selectedReport.id)}
-                  >
-                    {copiedId === selectedReport.id ? (
-                      <Check className="mr-2 h-4 w-4 text-green-500" />
-                    ) : (
-                      <Copy className="mr-2 h-4 w-4" />
-                    )}
-                    复制
-                  </Button>
-                  <Separator orientation="vertical" className="mx-1 h-6" />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="text-destructive hover:text-destructive/90"
-                    onClick={() => handleDelete(selectedReport.id)}
-                    title="删除"
-                  >
-                    <Trash2 className="h-5 w-5" />
-                  </Button>
-                </div>
-                <ScrollArea className="flex-1 p-6">
-                <div className="prose prose-sm dark:prose-invert max-w-none">
-                  <ReactMarkdown>{selectedReport.content}</ReactMarkdown>
-                </div>
-              </ScrollArea>
-            </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center h-full text-muted-foreground space-y-4">
-                <FileText className="h-16 w-16 opacity-20" />
-                <p>请选择一份周报查看详情</p>
-              </div>
-            )}
+        ) : (
+          <div className="flex flex-col items-center justify-center h-full text-muted-foreground space-y-4">
+            <FileText className="h-16 w-16 opacity-20" />
+            <p>请选择一份周报查看详情</p>
           </div>
-        </ResizablePanel>
-      </ResizablePanelGroup>
+        )}
+      </div>
     </div>
   );
 }

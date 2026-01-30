@@ -1,21 +1,17 @@
-/*
- * @Author: 江晚正愁余 1015134040@qq.com
- * @Date: 2026-01-30 10:26:52
- * @LastEditors: 江晚正愁余 1015134040@qq.com
- * @LastEditTime: 2026-01-30 11:17:19
- * @FilePath: \年底总结项目\git-weekly-reporter\src\components\ui\resizable.tsx
- * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
- */
 import { GripVertical } from "lucide-react"
-import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from "react-resizable-panels"
+import { Panel, Group, Separator, type GroupProps, type PanelProps, type SeparatorProps } from "react-resizable-panels"
 
 import { cn } from "@/lib/utils"
+
+type ResizablePanelGroupProps = GroupProps & {
+  className?: string
+}
 
 const ResizablePanelGroup = ({
   className,
   ...props
-}: React.ComponentProps<typeof PanelGroup>) => (
-  <PanelGroup
+}: ResizablePanelGroupProps) => (
+  <Group
     className={cn(
       "flex h-full w-full data-[panel-group-direction=vertical]:flex-col",
       className
@@ -26,14 +22,17 @@ const ResizablePanelGroup = ({
 
 const ResizablePanel = Panel
 
+type ResizableHandleProps = SeparatorProps & {
+  withHandle?: boolean
+  className?: string
+}
+
 const ResizableHandle = ({
   withHandle,
   className,
   ...props
-}: React.ComponentProps<typeof PanelResizeHandle> & {
-  withHandle?: boolean
-}) => (
-  <PanelResizeHandle
+}: ResizableHandleProps) => (
+  <Separator
     className={cn(
       "relative flex w-px items-center justify-center bg-border after:absolute after:inset-y-0 after:left-1/2 after:w-1 after:-translate-x-1/2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-1 data-[panel-group-direction=vertical]:h-px data-[panel-group-direction=vertical]:w-full data-[panel-group-direction=vertical]:after:left-0 data-[panel-group-direction=vertical]:after:h-1 data-[panel-group-direction=vertical]:after:w-full data-[panel-group-direction=vertical]:after:-translate-y-1/2 data-[panel-group-direction=vertical]:after:translate-x-0 [&[data-panel-group-direction=vertical]>div]:rotate-90",
       className
@@ -45,7 +44,8 @@ const ResizableHandle = ({
         <GripVertical className="h-2.5 w-2.5" />
       </div>
     )}
-  </PanelResizeHandle>
+  </Separator>
 )
 
 export { ResizablePanelGroup, ResizablePanel, ResizableHandle }
+export type { ResizablePanelGroupProps, ResizableHandleProps, PanelProps as ResizablePanelProps }
