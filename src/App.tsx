@@ -7,6 +7,7 @@ import HistoryPage from '@/pages/History';
 import { SidebarProvider, SidebarTrigger, SidebarInset } from '@/components/ui/sidebar';
 import './index.css';
 
+
 function App() {
   return (
     <Router>
