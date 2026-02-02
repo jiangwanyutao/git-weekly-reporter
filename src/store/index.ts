@@ -6,6 +6,7 @@ interface AppState {
   // Projects
   projects: Project[];
   addProject: (path: string) => void;
+  updateProject: (id: string, data: Partial<Project>) => void;
   removeProject: (id: string) => void;
 
   // Settings
@@ -74,7 +75,7 @@ export const useAppStore = create<AppState>()(
           ],
         }));
       },
-      updateProject: (id, data) =>
+      updateProject: (id: string, data: Partial<Project>) =>
         set((state) => ({
           projects: state.projects.map((p) =>
             p.id === id ? { ...p, ...data } : p
