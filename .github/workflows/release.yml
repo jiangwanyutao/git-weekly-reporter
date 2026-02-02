@@ -9,6 +9,8 @@ jobs:
   release:
     permissions:
       contents: write
+      id-token: write
+      actions: read
     environment: production
     strategy:
       fail-fast: false
