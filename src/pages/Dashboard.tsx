@@ -7,7 +7,7 @@ import { CommitLog, Report } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { toast } from '@/hooks/use-toast';
-import { Loader2, RefreshCw, Sparkles, StopCircle, CheckCircle2, Circle } from 'lucide-react';
+import { Loader2, RefreshCw, Sparkles, StopCircle, CheckCircle2, Circle, GitCommit, FileText, Activity, Calendar, GitBranch } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
@@ -40,7 +40,7 @@ type AgentStep = {
 };
 
 export default function Dashboard() {
-  const { projects, settings, addReport, updateSettings } = useAppStore();
+  const { projects, settings, addReport, updateSettings, reports } = useAppStore();
   const [logs, setLogs] = useState<CommitLog[]>([]);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -50,10 +50,10 @@ export default function Dashboard() {
   const [authors, setAuthors] = useState<string[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // 默认日期范围：上周五到本周五
+  // 默认日期范围：本周一到本周五
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: dayjs().day(5).subtract(1, 'week').toDate(),
-    to: dayjs().day(5).toDate(),
+    from: dayjs().startOf('week').add(1, 'day').toDate(), // 周一
+    to: dayjs().endOf('week').subtract(1, 'day').toDate(), // 周五
   });
 
   // Load authors when projects change
@@ -89,7 +89,7 @@ export default function Dashboard() {
       const until = dateRange?.to ? dayjs(dateRange.to).endOf('day').format('YYYY-MM-DD HH:mm:ss') : undefined;
 
       for (const project of projects) {
-        const projectLogs = await fetchGitLogs(project.path, settings.authorName, since, until);
+        const projectLogs = await fetchGitLogs(project.path, settings.authorName, since, until, project.alias || project.name);
         allLogs.push(...projectLogs);
       }
       // 按时间倒序
@@ -249,6 +249,9 @@ export default function Dashboard() {
         },
         content: reportContent,
         status: 'generated',
+        projects: Object.keys(groupedLogs),
+        branches: Array.from(new Set(logs.map(l => l.branch).filter(Boolean) as string[])),
+        totalCommits: logs.length,
       };
       addReport(newReport);
 
@@ -301,50 +304,114 @@ export default function Dashboard() {
     return date ? dayjs(date).format('YYYY年MM月DD日') : '...';
   };
 
+  const activeProjectsCount = useMemo(() => {
+    return Object.keys(groupedLogs).length;
+  }, [groupedLogs]);
+
+  const daysInWeek = useMemo(() => {
+    if (!dateRange?.from || !dateRange?.to) return '0/5';
+
+    const today = dayjs();
+    const start = dayjs(dateRange.from);
+
+    // 如果是本周（开始时间是本周一），则计算 "今天 - 周一 + 1"
+    if (today.isSame(start, 'week')) {
+      // 限制最大为 5 (防止周末显示 6/5 或 7/5)
+      const currentDay = Math.min(today.day() || 7, 5); // 周日(0)转为7，再限制为5
+      return `${currentDay}/5`;
+    }
+
+    // 如果不是本周（是历史周），则显示选定范围的天数
+    const end = dayjs(dateRange.to);
+    const diff = end.diff(start, 'day') + 1;
+    return `${Math.min(diff, 5)}/5`;
+  }, [dateRange]);
+
   return (
-    <div className="flex-1 p-6 space-y-6 h-full flex flex-col overflow-hidden">
-      <div className="flex justify-between items-center shrink-0">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">工作周报助手</h1>
-          <div className="flex items-center gap-2 mt-1">
-            <span className="text-muted-foreground text-sm">当前监听 {projects.length} 个项目，作者筛选:</span>
-            <Select
-              value={settings.authorName || 'all'}
-              onValueChange={(val) => {
-                updateSettings({ ...settings, authorName: val === 'all' ? '' : val });
-              }}
-            >
-              <SelectTrigger className="w-[180px] h-8 text-xs">
-                <SelectValue placeholder="全部作者" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">全部作者</SelectItem>
-                {authors.map(a => (
-                  <SelectItem key={a} value={a}>{a}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+    <div className="flex-1 p-2 space-y-6 h-full flex flex-col overflow-hidden">
+      <div className="flex flex-col gap-6 shrink-0">
+        <div className="flex justify-between items-start flex-wrap gap-4">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">仪表盘</h1>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-muted-foreground text-sm">当前监听 {projects.length} 个项目，作者筛选:</span>
+              <Select
+                value={settings.authorName || 'all'}
+                onValueChange={(val) => {
+                  updateSettings({ ...settings, authorName: val === 'all' ? '' : val });
+                }}
+              >
+                <SelectTrigger className="w-[180px] h-8 text-xs">
+                  <SelectValue placeholder="全部作者" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部作者</SelectItem>
+                  {authors.map(a => (
+                    <SelectItem key={a} value={a}>{a}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex gap-2 items-center flex-wrap">
+            <DatePickerWithRange date={dateRange} setDate={setDateRange} />
+            <Button variant="outline" onClick={loadLogs} disabled={loading || generating}>
+              <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              刷新
+            </Button>
           </div>
         </div>
-        <div className="flex gap-2 items-center">
-          <DatePickerWithRange date={dateRange} setDate={setDateRange} />
 
-          <Button variant="outline" onClick={loadLogs} disabled={loading || generating}>
-            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            刷新
-          </Button>
-
-          {generating ? (
-            <Button variant="destructive" onClick={handleStopGenerate}>
-              <StopCircle className="mr-2 h-4 w-4" />
-              停止
-            </Button>
-          ) : (
-            <Button onClick={handleGenerate} disabled={logs.length === 0}>
-              <Sparkles className="mr-2 h-4 w-4" />
-              生成周报
-            </Button>
-          )}
+        {/* 统计卡片区域 */}
+        <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-4">
+          <Card className="p-3">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-0 pb-1">
+              <CardTitle className="text-sm font-medium">本周提交</CardTitle>
+              <GitCommit className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="text-xl font-bold">{logs.length}</div>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                基于当前筛选范围
+              </p>
+            </CardContent>
+          </Card>
+          <Card className="p-3">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-0 pb-1">
+              <CardTitle className="text-sm font-medium">已生成报告</CardTitle>
+              <FileText className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="text-xl font-bold">{reports.length}</div>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                历史总计
+              </p>
+            </CardContent>
+          </Card>
+          <Card className="p-3">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-0 pb-1">
+              <CardTitle className="text-sm font-medium">活跃项目</CardTitle>
+              <Activity className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="text-xl font-bold">{activeProjectsCount}</div>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                有提交记录的项目
+              </p>
+            </CardContent>
+          </Card>
+          <Card className="p-3">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-0 pb-1">
+              <CardTitle className="text-sm font-medium">本周天数</CardTitle>
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="text-xl font-bold">{daysInWeek}</div>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                当前统计周期
+              </p>
+            </CardContent>
+          </Card>
         </div>
       </div>
 
@@ -352,24 +419,24 @@ export default function Dashboard() {
         <ResizablePanelGroup className="h-full rounded-lg border">
           {/* 左侧：提交记录列表 (按项目分组) */}
           <ResizablePanel defaultSize={40} minSize={30}>
-            <div className="h-full flex flex-col p-2">
+            <div className="h-full flex flex-col">
               <Card className="flex flex-col h-full shadow-none border-0">
                 <CardHeader className="pb-3 shrink-0 px-2 pt-2">
-                  <CardTitle>提交记录 ({logs.length})</CardTitle>
+                  <CardTitle>提交记录</CardTitle>
                   <CardDescription>
                     {formatDate(dateRange?.from)} 至 {formatDate(dateRange?.to)}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="flex-1 min-h-0 p-0 overflow-hidden">
                   <ScrollArea className="h-full">
-                    <div className="p-2 space-y-6">
+                    <div className="p-2 space-y-4">
                       {logs.length === 0 ? (
                         <div className="text-center py-12 text-muted-foreground">
                           暂无数据，请检查日期范围或刷新
                         </div>
                       ) : (
                         Object.entries(groupedLogs).map(([project, projectLogs]) => (
-                          <div key={project} className="space-y-2 border rounded-md p-2 bg-card">
+                          <div key={project} className="space-y-2 border rounded-md px-2 bg-card">
                             <div className="sticky top-0 bg-card z-10 py-2 border-b flex items-center justify-between">
                               <h3 className="font-semibold text-sm flex items-center">
                                 <Badge variant="secondary" className="mr-2">{project}</Badge>
@@ -381,7 +448,15 @@ export default function Dashboard() {
                                 {projectLogs.map((log) => (
                                   <div key={log.hash} className="text-sm p-2 hover:bg-accent hover:text-accent-foreground rounded-md transition-colors group">
                                     <div className="flex justify-between items-start gap-2">
-                                      <span className="font-medium break-all">{log.message}</span>
+                                      <div className="flex flex-col gap-1 min-w-0">
+                                        <span className="font-medium break-all leading-snug">{log.message}</span>
+                                        {log.branch && (
+                                          <div className="flex items-center gap-1 text-[10px] text-muted-foreground group-hover:text-accent-foreground/80">
+                                            <GitBranch className="h-3 w-3" />
+                                            <span>{log.branch}</span>
+                                          </div>
+                                        )}
+                                      </div>
                                       <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0 opacity-70 group-hover:text-accent-foreground group-hover:opacity-100">
                                         {dayjs(log.date).format('MM-DD HH:mm')}
                                       </span>
@@ -404,18 +479,37 @@ export default function Dashboard() {
 
           {/* 右侧：生成结果预览 */}
           <ResizablePanel defaultSize={60}>
-            <div className="h-full flex flex-col p-2">
+            <div className="h-full flex flex-col">
               <Card className="flex flex-col h-full shadow-none border-0">
-                <CardHeader className="pb-3 border-b shrink-0 px-2 pt-2">
-                  <CardTitle className="flex items-center gap-2">
-                    周报预览
-                    {generating && <Badge variant="secondary" className="animate-pulse">AI 生成中...</Badge>}
-                  </CardTitle>
-                  <CardDescription>
-                    {generatedReport ? 'AI 生成结果 (Markdown)' : '点击生成按钮开始'}
-                  </CardDescription>
+                <CardHeader className="pb-3 border-b shrink-0 px-2 pt-2 flex flex-row items-center justify-between space-y-0">
+                  <div className="space-y-1">
+                    <CardTitle className="flex items-center gap-2">
+                      周报预览
+                      {generating && <Badge variant="secondary" className="animate-pulse">AI 生成中...</Badge>}
+                    </CardTitle>
+                    <CardDescription className="flex items-center gap-3">
+                      <span>{generatedReport ? 'AI 生成结果' : '点击生成按钮开始'}</span>
+                      {logs.length > 0 && (
+                        <>
+                           <span className="flex items-center gap-1" title="提交总数"><GitCommit className="h-3 w-3"/> {logs.length}</span>
+                           <span className="flex items-center gap-1" title="涉及分支"><GitBranch className="h-3 w-3"/> {Array.from(new Set(logs.map(l=>l.branch).filter(Boolean))).length} 分支</span>
+                        </>
+                      )}
+                    </CardDescription>
+                  </div>
+                  {generating ? (
+                    <Button variant="destructive" size="sm" onClick={handleStopGenerate}>
+                      <StopCircle className="mr-2 h-4 w-4" />
+                      停止
+                    </Button>
+                  ) : (
+                    <Button size="sm" onClick={handleGenerate} disabled={logs.length === 0}>
+                      <Sparkles className="mr-2 h-4 w-4" />
+                      生成周报
+                    </Button>
+                  )}
                 </CardHeader>
-                <CardContent className="flex-1 min-h-0 p-4 bg-muted/20 overflow-hidden rounded-b-lg">
+                <CardContent className="flex-1 min-h-0 p-2 overflow-hidden rounded-b-lg">
                   {generatedReport || reasoning || generating || agentSteps.length > 0 ? (
                     <ScrollArea className="h-full pr-4">
                       {/* Agent Steps */}

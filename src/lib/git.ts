@@ -12,14 +12,14 @@ import { CommitLog } from '@/types';
 
 const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
-export async function fetchGitLogs(projectPath: string, author: string, since?: string, until?: string): Promise<CommitLog[]> {
+export async function fetchGitLogs(projectPath: string, author: string, since?: string, until?: string, projectNameOverride?: string): Promise<CommitLog[]> {
   // 如果不在 Tauri 环境下，返回 Mock 数据
   if (!isTauri) {
     console.log('Running in Web mode, returning mock logs.');
     return [
-      { hash: 'a1b2c3d', author: 'DemoUser', date: dayjs().subtract(1, 'hour').format('YYYY-MM-DD HH:mm:ss'), message: 'feat: 完成用户登录功能', project: 'git-weekly-reporter' },
-      { hash: 'e5f6g7h', author: 'DemoUser', date: dayjs().subtract(1, 'day').format('YYYY-MM-DD HH:mm:ss'), message: 'fix: 修复样式兼容性问题', project: 'git-weekly-reporter' },
-      { hash: 'i8j9k0l', author: 'DemoUser', date: dayjs().subtract(2, 'day').format('YYYY-MM-DD HH:mm:ss'), message: 'docs: 更新 README 文档', project: 'git-weekly-reporter' },
+      { hash: 'a1b2c3d', author: 'DemoUser', date: dayjs().subtract(1, 'hour').format('YYYY-MM-DD HH:mm:ss'), message: 'feat: 完成用户登录功能', project: projectNameOverride || 'git-weekly-reporter', branch: 'main' },
+      { hash: 'e5f6g7h', author: 'DemoUser', date: dayjs().subtract(1, 'day').format('YYYY-MM-DD HH:mm:ss'), message: 'fix: 修复样式兼容性问题', project: projectNameOverride || 'git-weekly-reporter', branch: 'develop' },
+      { hash: 'i8j9k0l', author: 'DemoUser', date: dayjs().subtract(2, 'day').format('YYYY-MM-DD HH:mm:ss'), message: 'docs: 更新 README 文档', project: projectNameOverride || 'git-weekly-reporter', branch: 'feature/docs' },
     ];
   }
 
@@ -28,6 +28,18 @@ export async function fetchGitLogs(projectPath: string, author: string, since?: 
   const start = since || dayjs().day(5).subtract(1, 'week').hour(18).format('YYYY-MM-DD HH:mm:ss');
 
   try {
+    // 1. 获取当前分支名
+    let currentBranch = 'HEAD';
+    try {
+        const branchCmd = Command.create('git', ['-C', projectPath, 'rev-parse', '--abbrev-ref', 'HEAD']);
+        const branchOut = await branchCmd.execute();
+        if (branchOut.code === 0) {
+            currentBranch = branchOut.stdout.trim();
+        }
+    } catch (e) {
+        console.warn('Failed to get branch name', e);
+    }
+
     const args = [
       '-C', projectPath,
       'log',
@@ -54,7 +66,7 @@ export async function fetchGitLogs(projectPath: string, author: string, since?: 
       return [];
     }
 
-    const projectName = projectPath.split(/[\\/]/).pop() || 'Unknown';
+    const projectName = projectNameOverride || projectPath.split(/[\\/]/).pop() || 'Unknown';
 
     return output.stdout.split('\n')
       .filter(line => line.trim())
@@ -65,7 +77,8 @@ export async function fetchGitLogs(projectPath: string, author: string, since?: 
           author: authorName,
           date,
           message,
-          project: projectName
+          project: projectName,
+          branch: currentBranch
         };
       });
 

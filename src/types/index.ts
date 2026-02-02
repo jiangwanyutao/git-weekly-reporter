@@ -2,6 +2,7 @@ export interface Project {
   id: string;
   path: string;
   name: string;
+  alias?: string;
   lastUpdated: number;
 }
 
@@ -11,6 +12,7 @@ export interface CommitLog {
   date: string;
   message: string;
   project: string;
+  branch?: string;
 }
 
 export interface Report {
@@ -22,6 +24,10 @@ export interface Report {
   };
   content: string; // Markdown content
   status: 'draft' | 'generated' | 'failed';
+  // Meta data for display
+  projects?: string[]; // List of project names involved
+  branches?: string[]; // List of branches involved
+  totalCommits?: number;
 }
 
 export interface AppSettings {

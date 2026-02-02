@@ -24,9 +24,9 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://example.com/updates/{{target}}/{{current_version}}"
+        "https://github.com/jiangwanyutao/git-weekly-reporter/releases/latest/download/latest.json"
       ],
-      "pubkey": "YOUR_PUBLIC_KEY_HERE"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEUzN0VFQzQ5MzhDRDIxMTYKUldRV0ljMDRTZXgrNDc2cGFJc0hKV0tWbnRQV3JtNkN6bzFtL3doVjdES1I5WThwMEdmYkdkVVcK"
     }
   },
   "bundle": {

@@ -61,9 +61,13 @@ export function AppSidebar() {
         addProject(selected);
         toast({ title: "项目已添加", description: selected });
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      toast({ title: "添加失败", variant: "destructive" });
+      toast({ 
+        title: "添加失败", 
+        description: err.message || "无法添加项目",
+        variant: "destructive" 
+      });
     }
   };
 

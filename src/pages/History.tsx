@@ -1,8 +1,9 @@
 
 import { useAppStore } from '@/store';
+import { Report } from '@/types';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Trash2, FileText, Calendar, Copy, Check, Download } from 'lucide-react';
+import { Trash2, FileText, Calendar, Copy, Check, Download, GitBranch, GitCommit, Layers } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
@@ -37,12 +38,35 @@ export default function HistoryPage() {
     toast({ title: "已删除", description: "周报记录已移除" });
   };
 
-  const handleCopy = async (content: string, id: string) => {
+  const handleCopy = async (report: Report) => {
     try {
-      await navigator.clipboard.writeText(content);
-      setCopiedId(id);
+      const parts = [];
+      parts.push(`周报日期: ${report.dateRange.start} ~ ${report.dateRange.end}`);
+      if (report.totalCommits !== undefined) parts.push(`提交总数: ${report.totalCommits}`);
+      if (report.projects && report.projects.length > 0) parts.push(`涉及项目: ${report.projects.join(', ')}`);
+      if (report.branches && report.branches.length > 0) parts.push(`涉及分支: ${report.branches.join(', ')}`);
+      parts.push('');
+
+      // Remove markdown syntax
+      const plainContent = report.content
+        .replace(/^#+\s+/gm, '') // Remove headers
+        .replace(/\*\*(.*?)\*\*/g, '$1') // Remove bold
+        .replace(/\*(.*?)\*/g, '$1') // Remove italic
+        .replace(/`{3}[\s\S]*?`{3}/g, (match) => match.replace(/`{3}/g, '')) // Remove code blocks but keep content
+        .replace(/`([^`]+)`/g, '$1') // Remove inline code
+        .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1') // Remove links
+        .replace(/^>\s+/gm, '') // Remove blockquotes
+        .replace(/^\s*[-*+]\s+/gm, '• ') // Replace list items with bullet points
+        .replace(/^\d+\.\s+/gm, (match) => match); // Keep numbered lists
+
+      parts.push(plainContent);
+
+      const fullContent = parts.join('\n');
+
+      await navigator.clipboard.writeText(fullContent);
+      setCopiedId(report.id);
       setTimeout(() => setCopiedId(null), 2000);
-      toast({ title: "复制成功", description: "周报内容已复制到剪贴板" });
+      toast({ title: "复制成功", description: "周报内容(纯文本)及元数据已复制到剪贴板" });
     } catch (err) {
       toast({ title: "复制失败", description: "无法访问剪贴板", variant: "destructive" });
     }
@@ -162,10 +186,22 @@ export default function HistoryPage() {
                   <div className={cn("line-clamp-2 text-xs w-full group-hover:text-accent-foreground", selectedReport?.id === report.id ? "text-accent-foreground" : "text-muted-foreground")}>
                     {report.content.substring(0, 100)}...
                   </div>
-                  <div className="flex items-center gap-2 mt-1">
-                    <Badge variant="outline" className="text-[10px] px-1 py-0 text-accent-foreground">
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    <Badge variant="outline" className={cn("text-[10px] px-1 py-0 transition-colors group-hover:text-accent-foreground", selectedReport?.id === report.id ? "text-accent-foreground border-accent-foreground/30" : "text-muted-foreground")}>
                       {report.content.length} 字
                     </Badge>
+                    {report.totalCommits !== undefined && (
+                      <Badge variant="outline" className={cn("text-[10px] px-1 py-0 gap-1 transition-colors group-hover:text-accent-foreground", selectedReport?.id === report.id ? "text-accent-foreground border-accent-foreground/30" : "text-muted-foreground")}>
+                        <GitCommit className="h-3 w-3" />
+                        {report.totalCommits}
+                      </Badge>
+                    )}
+                    {report.branches && report.branches.length > 0 && (
+                      <Badge variant="outline" className={cn("text-[10px] px-1 py-0 gap-1 transition-colors group-hover:text-accent-foreground", selectedReport?.id === report.id ? "text-accent-foreground border-accent-foreground/30" : "text-muted-foreground")}>
+                        <GitBranch className="h-3 w-3" />
+                        {report.branches.length > 1 ? `${report.branches.length} 分支` : report.branches[0]}
+                      </Badge>
+                    )}
                   </div>
                 </button>
               ))
@@ -178,28 +214,50 @@ export default function HistoryPage() {
       <div className="flex-1 flex flex-col min-w-0 border rounded-lg bg-background overflow-hidden">
         {selectedReport ? (
           <div className="h-full flex flex-col">
-            <div className="flex items-center justify-between p-4 border-b shrink-0">
+            <div className="flex flex-col gap-4 p-4 border-b shrink-0">
               <div className="flex flex-col gap-1">
                 <h2 className="text-lg font-semibold flex items-center gap-2">
                   <FileText className="h-5 w-5 text-primary" />
                   周报详情
                 </h2>
               </div>
-              <div className="text-sm text-muted-foreground flex items-center gap-4">
-                <span className="flex items-center gap-1">
-                  <Calendar className="h-3.5 w-3.5" />
-                  生成于 {dayjs(selectedReport.createdAt).format('YYYY-MM-DD HH:mm')}
-                </span>
-                <span>
-                  覆盖: {dayjs(selectedReport.dateRange.start).format('YYYY-MM-DD')} 至 {dayjs(selectedReport.dateRange.end).format('YYYY-MM-DD')}
-                </span>
+              <div className="flex flex-col gap-2">
+                <div className="text-sm text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <span className="flex items-center gap-1">
+                    <Calendar className="h-3.5 w-3.5" />
+                    {dayjs(selectedReport.createdAt).format('YYYY-MM-DD HH:mm')}
+                  </span>
+                  <span>
+                    覆盖: {dayjs(selectedReport.dateRange.start).format('MM-DD')} ~ {dayjs(selectedReport.dateRange.end).format('MM-DD')}
+                  </span>
+                  {selectedReport.totalCommits !== undefined && (
+                    <span className="flex items-center gap-1">
+                      <GitCommit className="h-3.5 w-3.5" />
+                      {selectedReport.totalCommits} commits
+                    </span>
+                  )}
+                  {selectedReport.projects && selectedReport.projects.length > 0 && (
+                    <span className="flex items-center gap-1">
+                      <Layers className="h-3.5 w-3.5" />
+                      {selectedReport.projects.length} projects
+                    </span>
+                  )}
+                </div>
+                {selectedReport.branches && selectedReport.branches.length > 0 && (
+                  <div className="text-xs text-muted-foreground flex items-start gap-1">
+                    <GitBranch className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                    <span className="break-all">
+                      {selectedReport.branches.join(', ')}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-2 px-4 py-2 border-b shrink-0">
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => handleCopy(selectedReport.content, selectedReport.id)}
+                onClick={() => handleCopy(selectedReport)}
               >
                 {copiedId === selectedReport.id ? (
                   <Check className="mr-2 h-4 w-4 text-green-500" />

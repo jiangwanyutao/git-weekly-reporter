@@ -48,7 +48,7 @@ const DEFAULT_PROMPT = `你是一个专业的周报助手。请根据我提供�
 
 export const useAppStore = create<AppState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       projects: [],
       settings: {
         authorName: '',
@@ -61,6 +61,11 @@ export const useAppStore = create<AppState>()(
       reports: [],
 
       addProject: (path) => {
+        const { projects } = get();
+        if (projects.some((p) => p.path === path)) {
+          throw new Error('项目已存在');
+        }
+
         const name = path.split(/[\\/]/).pop() || 'Unknown';
         set((state) => ({
           projects: [
@@ -69,6 +74,12 @@ export const useAppStore = create<AppState>()(
           ],
         }));
       },
+      updateProject: (id, data) =>
+        set((state) => ({
+          projects: state.projects.map((p) =>
+            p.id === id ? { ...p, ...data } : p
+          ),
+        })),
       removeProject: (id) =>
         set((state) => ({
           projects: state.projects.filter((p) => p.id !== id),
