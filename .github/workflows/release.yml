@@ -11,7 +11,6 @@ jobs:
       contents: write
       id-token: write
       actions: read
-    environment: production
     strategy:
       fail-fast: false
       matrix:
