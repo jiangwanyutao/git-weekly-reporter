@@ -1,37 +1,39 @@
-
 import { open } from '@tauri-apps/plugin-dialog';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useAppStore } from '@/store';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { FolderPlus, Trash2, Save } from 'lucide-react';
+import { FolderPlus, Trash2, Save, Settings2, Key, MessageSquare, GitBranch, ExternalLink, CheckCircle2 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from '@/hooks/use-toast';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
 export default function SettingsPage() {
   const { settings, updateSettings, projects, addProject, removeProject } = useAppStore();
   const [localSettings, setLocalSettings] = useState(settings);
+  const [saved, setSaved] = useState(false);
 
   const handleSave = () => {
     updateSettings(localSettings);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
     toast({
-      title: "设置已保存",
-      description: "您的配置已成功更新。",
+      title: "Settings saved",
+      description: "Your configuration has been updated.",
     });
   };
 
   const handleAddProject = async () => {
     try {
       if (!isTauri) {
-        // Web 模式下的 Mock 行为
         const mockPath = `C:\\Mock\\Project\\${Math.floor(Math.random() * 1000)}`;
         addProject(mockPath);
-        toast({ title: "Mock项目已添加", description: mockPath });
+        toast({ title: "Mock project added", description: mockPath });
         return;
       }
 
@@ -41,110 +43,200 @@ export default function SettingsPage() {
       });
       if (selected && typeof selected === 'string') {
         addProject(selected);
-        toast({ title: "项目已添加", description: selected });
+        toast({ title: "Project added", description: selected });
       }
     } catch (err) {
       console.error(err);
-      toast({ title: "添加失败", variant: "destructive" });
+      toast({ title: "Failed to add", variant: "destructive" });
     }
   };
 
   return (
-    <div className="h-full flex flex-col p-6 space-y-6 overflow-hidden">
-      <div className="flex justify-between items-center shrink-0">
-         <h1 className="text-3xl font-bold">系统配置</h1>
-         <Button onClick={handleSave} size="lg">
-          <Save className="mr-2 h-4 w-4" />
-          保存所有配置
-        </Button>
-      </div>
+    <div className="h-full flex flex-col overflow-hidden">
+      {/* Header */}
+      <header className="shrink-0 px-6 py-4 border-b border-border/50">
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <h1 className="text-xl font-semibold tracking-tight flex items-center gap-2">
+              <Settings2 className="h-5 w-5 text-primary" />
+              Settings
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Configure your projects, API keys, and prompts
+            </p>
+          </div>
+          <Button onClick={handleSave} className="h-9">
+            {saved ? (
+              <>
+                <CheckCircle2 className="h-4 w-4 mr-2 text-primary-foreground" />
+                Saved
+              </>
+            ) : (
+              <>
+                <Save className="h-4 w-4 mr-2" />
+                Save Changes
+              </>
+            )}
+          </Button>
+        </div>
+      </header>
 
-      <ScrollArea className="flex-1 min-h-0">
-        <div className="pr-4 pb-6 space-y-8">
-          {/* 1. Git 项目管理 */}
-          <Card className="shadow-sm hover:shadow-md transition-shadow duration-200">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Git 项目管理</CardTitle>
-              <Button onClick={handleAddProject} variant="outline" size="sm">
-                <FolderPlus className="mr-2 h-4 w-4" />
-                添加项目
+      {/* Content */}
+      <ScrollArea className="flex-1">
+        <div className="p-6 space-y-6 max-w-4xl">
+          {/* Git Projects */}
+          <section className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
+                  <GitBranch className="h-4 w-4 text-primary" />
+                </div>
+                <div>
+                  <h2 className="font-medium">Git Projects</h2>
+                  <p className="text-xs text-muted-foreground">
+                    Manage repositories to track
+                  </p>
+                </div>
+              </div>
+              <Button onClick={handleAddProject} variant="outline" size="sm" className="h-8">
+                <FolderPlus className="h-4 w-4 mr-2" />
+                Add Project
               </Button>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {projects.length === 0 ? (
-                  <div className="text-center text-muted-foreground py-8">
-                    暂无项目，请点击右上角添加
-                  </div>
-                ) : (
-                  projects.map((project) => (
-                    <div key={project.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-accent hover:text-accent-foreground transition-colors group">
-                      <div>
-                        <div className="font-medium">{project.name}</div>
-                        <div className="text-xs text-muted-foreground group-hover:text-accent-foreground/80 transition-colors">{project.path}</div>
+            </div>
+
+            <div className="rounded-xl border border-border/50 bg-card/50 overflow-hidden">
+              {projects.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                  <GitBranch className="h-8 w-8 opacity-20 mb-3" />
+                  <p className="text-sm">No projects added</p>
+                  <p className="text-xs mt-1">Click "Add Project" to get started</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-border/50">
+                  {projects.map((project) => (
+                    <div
+                      key={project.id}
+                      className="flex items-center justify-between p-4 hover:bg-accent/30 transition-colors group"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted/50 shrink-0">
+                          <GitBranch className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-medium text-sm truncate">{project.name}</p>
+                          <p className="text-xs text-muted-foreground truncate">{project.path}</p>
+                        </div>
                       </div>
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="text-destructive hover:text-destructive/90 group-hover:bg-destructive/10"
+                        className="h-8 w-8 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0"
                         onClick={() => removeProject(project.id)}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
-                  ))
-                )}
-              </div>
-            </CardContent>
-          </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
 
-          {/* 2. GLM 模型配置 */}
-          <Card className="shadow-sm hover:shadow-md transition-shadow duration-200">
-            <CardHeader>
-              <CardTitle>模型配置 (GLM-4.7)</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label>API Key</Label>
-                <Input
-                  type="password"
-                  value={localSettings.glmApiKey}
-                  onChange={(e) => setLocalSettings({ ...localSettings, glmApiKey: e.target.value })}
-                  placeholder="请输入智谱 AI 的 API Key"
-                />
+          {/* API Configuration */}
+          <section className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
+                <Key className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <h2 className="font-medium">Model Configuration</h2>
                 <p className="text-xs text-muted-foreground">
-                  申请地址: <a href="https://bigmodel.cn" target="_blank" className="underline">bigmodel.cn</a>
+                  Configure your GLM API credentials
                 </p>
               </div>
+            </div>
+
+            <div className="rounded-xl border border-border/50 bg-card/50 p-4 space-y-4">
               <div className="space-y-2">
-                <Label>Git 作者名称 (用于筛选)</Label>
+                <Label className="text-sm">API Key</Label>
+                <div className="relative">
+                  <Input
+                    type="password"
+                    value={localSettings.glmApiKey}
+                    onChange={(e) => setLocalSettings({ ...localSettings, glmApiKey: e.target.value })}
+                    placeholder="Enter your GLM API Key"
+                    className="pr-24 bg-background/50"
+                  />
+                  {localSettings.glmApiKey && (
+                    <Badge
+                      variant="secondary"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 h-6 text-[10px]"
+                    >
+                      Configured
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  Get your API key from{' '}
+                  <a
+                    href="https://bigmodel.cn"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline inline-flex items-center gap-0.5"
+                  >
+                    bigmodel.cn
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm">Author Filter</Label>
                 <Input
                   value={localSettings.authorName}
                   onChange={(e) => setLocalSettings({ ...localSettings, authorName: e.target.value })}
-                  placeholder="例如: Zhang San"
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* 3. 提示词配置 */}
-          <Card className="shadow-sm hover:shadow-md transition-shadow duration-200">
-            <CardHeader>
-              <CardTitle>提示词模板</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <Textarea
-                  className="min-h-[200px] font-mono text-sm"
-                  value={localSettings.promptTemplate}
-                  onChange={(e) => setLocalSettings({ ...localSettings, promptTemplate: e.target.value })}
+                  placeholder="e.g., John Doe"
+                  className="bg-background/50"
                 />
                 <p className="text-xs text-muted-foreground">
-                  可用变量: <code>{`{{commits}}`}</code> - 将被替换为具体的 Git 提交记录
+                  Filter commits by author name (optional)
                 </p>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </section>
+
+          {/* Prompt Template */}
+          <section className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
+                <MessageSquare className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <h2 className="font-medium">Prompt Template</h2>
+                <p className="text-xs text-muted-foreground">
+                  Customize the AI generation prompt
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-border/50 bg-card/50 p-4 space-y-3">
+              <Textarea
+                className="min-h-[200px] font-mono text-sm bg-background/50 resize-none"
+                value={localSettings.promptTemplate}
+                onChange={(e) => setLocalSettings({ ...localSettings, promptTemplate: e.target.value })}
+                placeholder="Enter your prompt template..."
+              />
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs text-muted-foreground">Available variables:</span>
+                <Badge variant="outline" className="h-5 text-[10px] font-mono">
+                  {'{{commits}}'}
+                </Badge>
+                <Badge variant="outline" className="h-5 text-[10px] font-mono">
+                  {'{{context}}'}
+                </Badge>
+              </div>
+            </div>
+          </section>
         </div>
       </ScrollArea>
     </div>

@@ -4,82 +4,82 @@
 
 @layer base {
   :root {
-    --background: 0 0% 97.6471%;
-    --foreground: 0 0% 20%;
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 20%;
+    --card-foreground: 240 10% 3.9%;
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 20%;
-    --primary: 246.9065 74.3316% 63.3333%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 210.3704 75.7009% 79.0196%;
-    --secondary-foreground: 0 0% 20%;
-    --muted: 45.0000 15.6250% 74.9020%;
-    --muted-foreground: 0 0% 43.1373%;
-    --accent: 246.9065 74.3316% 63.3333%;
-    --accent-foreground: 0 0% 100%;
-    --destructive: 0 84.2365% 60.1961%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 83.1373%;
-    --input: 0 0% 83.1373%;
-    --ring: 246.9065 74.3316% 63.3333%;
-    --radius: 0.5rem;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 142.1 76.2% 36.3%;
+    --primary-foreground: 355.7 100% 97.3%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 142.1 76.2% 36.3%;
+    --radius: 0.625rem;
 
     /* Charts */
-    --chart-1: 246.9065 74.3316% 63.3333%;
-    --chart-2: 282.2857 43.5685% 47.2549%;
-    --chart-3: 274.6154 100% 25.4902%;
-    --chart-4: 218.5401 79.1908% 66.0784%;
-    --chart-5: 207.2727 44% 49.0196%;
+    --chart-1: 142.1 76.2% 36.3%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
 
     /* Sidebar */
-    --sidebar-background: 0 0% 97.6471%;
-    --sidebar-foreground: 0 0% 20%;
-    --sidebar-primary: 246.9065 74.3316% 63.3333%;
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 142.1 76.2% 36.3%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 72.0000 17.9283% 49.2157%;
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 0 0% 83.1373%;
-    --sidebar-ring: 246.9065 74.3316% 63.3333%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 142.1 76.2% 36.3%;
   }
 
   .dark {
-    --background: 220.0000 14.7541% 11.9608%;
-    --foreground: 0 0% 89.8039%;
-    --card: 197.1429 6.9307% 19.8039%;
-    --card-foreground: 0 0% 89.8039%;
-    --popover: 197.1429 6.9307% 19.8039%;
-    --popover-foreground: 0 0% 89.8039%;
-    --primary: 246.9065 74.3316% 63.3333%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 274.6154 100% 25.4902%;
-    --secondary-foreground: 0 0% 89.8039%;
-    --muted: 0 0% 26.6667%;
-    --muted-foreground: 0 0% 63.9216%;
-    --accent: 246.9065 74.3316% 55%;
-    --accent-foreground: 0 0% 89.8039%;
-    --destructive: 0 84.2365% 60.1961%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 26.6667%;
-    --input: 0 0% 26.6667%;
-    --ring: 246.9065 74.3316% 63.3333%;
+    --background: 224 71% 4%;
+    --foreground: 213 31% 91%;
+    --card: 224 71% 4%;
+    --card-foreground: 213 31% 91%;
+    --popover: 224 71% 4%;
+    --popover-foreground: 213 31% 91%;
+    --primary: 142.1 70.6% 45.3%;
+    --primary-foreground: 144.9 80.4% 10%;
+    --secondary: 222.2 47.4% 11.2%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 223 47% 11%;
+    --muted-foreground: 215.4 16.3% 56.9%;
+    --accent: 216 34% 17%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 216 34% 17%;
+    --input: 216 34% 17%;
+    --ring: 142.4 71.8% 29.2%;
 
     /* Charts */
-    --chart-1: 246.9065 74.3316% 63.3333%;
-    --chart-2: 282.2857 43.5685% 47.2549%;
-    --chart-3: 274.6154 100% 25.4902%;
-    --chart-4: 218.5401 79.1908% 66.0784%;
-    --chart-5: 207.2727 44% 49.0196%;
+    --chart-1: 142.1 70.6% 45.3%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
 
     /* Sidebar */
-    --sidebar-background: 220.0000 14.7541% 11.9608%;
-    --sidebar-foreground: 0 0% 89.8039%;
-    --sidebar-primary: 246.9065 74.3316% 63.3333%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 218.5401 79.1908% 66.0784%;
-    --sidebar-accent-foreground: 0 0% 89.8039%;
-    --sidebar-border: 0 0% 26.6667%;
-    --sidebar-ring: 246.9065 74.3316% 63.3333%;
+    --sidebar-background: 222.2 84% 4.9%;
+    --sidebar-foreground: 213 31% 91%;
+    --sidebar-primary: 142.1 70.6% 45.3%;
+    --sidebar-primary-foreground: 144.9 80.4% 10%;
+    --sidebar-accent: 216 34% 17%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 216 34% 17%;
+    --sidebar-ring: 142.4 71.8% 29.2%;
   }
 }
 
@@ -88,9 +88,57 @@
     @apply border-border;
   }
 
+  html {
+    @apply dark;
+  }
+
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
     font-feature-settings: "rlig" 1, "calt" 1;
-    font-family: "Montserrat", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+}
+
+@layer utilities {
+  .glass {
+    @apply bg-card/50 backdrop-blur-xl border-border/50;
+  }
+
+  .glass-hover {
+    @apply hover:bg-accent/50 hover:backdrop-blur-xl transition-all duration-200;
+  }
+
+  .gradient-border {
+    @apply relative;
+  }
+
+  .gradient-border::before {
+    content: '';
+    @apply absolute inset-0 rounded-lg p-[1px] -z-10;
+    background: linear-gradient(135deg, hsl(var(--primary)) 0%, transparent 50%);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+  }
+
+  /* Custom scrollbar */
+  .custom-scrollbar::-webkit-scrollbar {
+    @apply w-1.5;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-muted-foreground/20 rounded-full;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/40;
+  }
+
+  /* Smooth transitions */
+  .transition-smooth {
+    @apply transition-all duration-300 ease-out;
   }
 }

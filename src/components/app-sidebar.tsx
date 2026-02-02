@@ -1,43 +1,46 @@
-
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Settings, FileText, FolderPlus, History, RefreshCcw } from 'lucide-react';
+import { LayoutDashboard, Settings, History, FolderPlus, RefreshCcw, Sparkles, ChevronRight } from 'lucide-react';
 import { useAppStore } from '@/store';
 import { open } from '@tauri-apps/plugin-dialog';
 import { check } from '@tauri-apps/plugin-updater';
 import { toast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarSeparator,
+  SidebarRail,
 } from '@/components/ui/sidebar';
+import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
 export function AppSidebar() {
   const location = useLocation();
-  const { addProject } = useAppStore();
+  const { addProject, projects, reports } = useAppStore();
 
   const routes = [
     {
-      label: '仪表盘',
-      icon: Home,
+      label: 'Dashboard',
+      icon: LayoutDashboard,
       href: '/',
+      badge: projects.length > 0 ? `${projects.length}` : undefined,
     },
     {
-      label: '历史周报',
+      label: 'History',
       icon: History,
       href: '/history',
+      badge: reports.length > 0 ? `${reports.length}` : undefined,
     },
     {
-      label: '系统配置',
+      label: 'Settings',
       icon: Settings,
       href: '/settings',
     },
@@ -46,10 +49,9 @@ export function AppSidebar() {
   const handleAddProject = async () => {
     try {
       if (!isTauri) {
-        // Web 模式下的 Mock 行为
         const mockPath = `C:\\Mock\\Project\\${Math.floor(Math.random() * 1000)}`;
         addProject(mockPath);
-        toast({ title: "Mock项目已添加", description: mockPath });
+        toast({ title: "Mock project added", description: mockPath });
         return;
       }
 
@@ -59,17 +61,17 @@ export function AppSidebar() {
       });
       if (selected && typeof selected === 'string') {
         addProject(selected);
-        toast({ title: "项目已添加", description: selected });
+        toast({ title: "Project added", description: selected });
       }
     } catch (err) {
       console.error(err);
-      toast({ title: "添加失败", variant: "destructive" });
+      toast({ title: "Failed to add", variant: "destructive" });
     }
   };
 
   const handleCheckUpdate = async () => {
     if (!isTauri) {
-      toast({ title: "检查更新", description: "Web模式下不支持检查更新" });
+      toast({ title: "Check Update", description: "Not supported in web mode" });
       return;
     }
 
@@ -77,81 +79,127 @@ export function AppSidebar() {
       const update = await check();
       if (update) {
         toast({
-          title: "发现新版本",
-          description: `版本: ${update.version}\n内容: ${update.body || '无更新日志'}`
+          title: "New version available",
+          description: `Version: ${update.version}`
         });
-        // 在此处可以添加弹窗询问用户是否更新
-        // await update.downloadAndInstall();
-        // await relaunch();
       } else {
-        toast({ title: "检查更新", description: "当前已是最新版本" });
+        toast({ title: "Check Update", description: "Already up to date" });
       }
     } catch (error) {
       console.error(error);
-      // 忽略部分已知错误，例如配置未完成导致的错误，给用户更友好的提示
       toast({
-        title: "检查更新失败",
-        description: "请检查网络或更新配置",
+        title: "Update check failed",
+        description: "Please check your network",
         variant: "destructive"
       });
     }
   };
 
   return (
-    <Sidebar>
-      <SidebarHeader>
-        <div className="flex items-center gap-2 px-2 py-2">
-          <FileText className="h-6 w-6 text-primary" />
-          <span className="font-bold text-lg">周报助手</span>
-        </div>
+    <Sidebar variant="floating" collapsible="icon">
+      <SidebarHeader className="p-4">
+        <Link to="/" className="flex items-center gap-3 group">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground shrink-0">
+            <Sparkles className="h-5 w-5" />
+          </div>
+          <div className="flex flex-col group-data-[collapsible=icon]:hidden">
+            <span className="font-semibold text-sm">Weekly Reporter</span>
+            <span className="text-[10px] text-muted-foreground">AI-Powered</span>
+          </div>
+        </Link>
       </SidebarHeader>
-      <SidebarContent>
+
+      <SidebarContent className="px-2">
         <SidebarGroup>
-          <SidebarGroupLabel>功能导航</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {routes.map((route) => (
-                <SidebarMenuItem key={route.href}>
-                  <SidebarMenuButton asChild isActive={location.pathname === route.href}>
-                    <Link to={route.href}>
-                      <route.icon />
-                      <span>{route.label}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+              {routes.map((route) => {
+                const isActive = location.pathname === route.href;
+                return (
+                  <SidebarMenuItem key={route.href}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isActive}
+                      tooltip={route.label}
+                      className={cn(
+                        "h-10 transition-all",
+                        isActive && "bg-primary/10 text-primary"
+                      )}
+                    >
+                      <Link to={route.href}>
+                        <route.icon className={cn("h-4 w-4", isActive && "text-primary")} />
+                        <span className="flex-1">{route.label}</span>
+                        {route.badge && (
+                          <Badge
+                            variant="secondary"
+                            className={cn(
+                              "h-5 min-w-5 px-1.5 text-[10px] font-medium",
+                              isActive && "bg-primary/20 text-primary"
+                            )}
+                          >
+                            {route.badge}
+                          </Badge>
+                        )}
+                        <ChevronRight className={cn(
+                          "h-4 w-4 opacity-0 -translate-x-2 transition-all group-data-[collapsible=icon]:hidden",
+                          isActive && "opacity-100 translate-x-0"
+                        )} />
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarSeparator />
-
-        <SidebarGroup>
-           <SidebarGroupLabel>快捷操作</SidebarGroupLabel>
-           <SidebarGroupContent>
-             <SidebarMenu>
-               <SidebarMenuItem>
-                <SidebarMenuButton onClick={handleAddProject}>
-                  <FolderPlus />
-                  <span>添加项目</span>
+        <SidebarGroup className="mt-auto">
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={handleAddProject}
+                  tooltip="Add Project"
+                  className="h-10 text-muted-foreground hover:text-foreground"
+                >
+                  <FolderPlus className="h-4 w-4" />
+                  <span>Add Project</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
-                <SidebarMenuButton onClick={handleCheckUpdate}>
-                  <RefreshCcw />
-                  <span>检查更新</span>
+                <SidebarMenuButton
+                  onClick={handleCheckUpdate}
+                  tooltip="Check Update"
+                  className="h-10 text-muted-foreground hover:text-foreground"
+                >
+                  <RefreshCcw className="h-4 w-4" />
+                  <span>Check Update</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
-             </SidebarMenu>
-           </SidebarGroupContent>
+            </SidebarMenu>
+          </SidebarGroupContent>
         </SidebarGroup>
-
       </SidebarContent>
-      <SidebarFooter>
-        <div className="p-4 text-xs text-muted-foreground text-center">
-          @江晚正愁余 V1.0.0
-        </div>
+
+      <SidebarFooter className="p-4 group-data-[collapsible=icon]:p-2">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="flex items-center gap-3 px-2 py-2 rounded-lg bg-muted/50 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
+              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/50 text-[10px] font-bold text-primary-foreground shrink-0">
+                JW
+              </div>
+              <div className="flex flex-col group-data-[collapsible=icon]:hidden">
+                <span className="text-xs font-medium">v1.0.0</span>
+                <span className="text-[10px] text-muted-foreground">@jiangwanyutao</span>
+              </div>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="right" className="group-data-[collapsible=icon]:block hidden">
+            v1.0.0 - @jiangwanyutao
+          </TooltipContent>
+        </Tooltip>
       </SidebarFooter>
+      <SidebarRail />
     </Sidebar>
   );
 }
