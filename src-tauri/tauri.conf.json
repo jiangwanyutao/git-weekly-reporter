@@ -13,8 +13,11 @@
     "windows": [
       {
         "title": "AI周报助手",
-        "width": 1366,
-        "height": 768
+        "width": 1200,
+        "height": 700,
+        "decorations": false,
+        "visible": false,
+        "center": true
       }
     ],
     "security": {

@@ -1,6 +1,6 @@
-
 import { Link, useLocation } from 'react-router-dom';
 import { Home, Settings, FileText, FolderPlus, History, RefreshCcw } from 'lucide-react';
+import { handleWindowDrag, TITLEBAR_HEIGHT } from '@/components/TitleBar';
 import { useAppStore } from '@/store';
 import { open } from '@tauri-apps/plugin-dialog';
 import { check } from '@tauri-apps/plugin-updater';
@@ -129,8 +129,11 @@ export function AppSidebar() {
 
   return (
     <Sidebar>
-      <SidebarHeader>
-        <div className="flex items-center gap-2 px-2 py-2">
+      <SidebarHeader
+        onMouseDown={handleWindowDrag}
+        className={`${TITLEBAR_HEIGHT} flex items-center select-none cursor-default`}
+      >
+        <div className="flex items-center gap-2 px-2">
           <FileText className="h-6 w-6 text-primary" />
           <span className="font-bold text-lg">周报助手</span>
         </div>
