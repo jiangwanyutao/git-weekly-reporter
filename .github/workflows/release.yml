@@ -37,6 +37,19 @@ jobs:
       - name: Install dependencies (frontend)
         run: pnpm install
 
+      - name: Check for Signing Key
+        shell: bash
+        env:
+          SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -z "$SIGNING_KEY" ]; then
+            echo "Error: TAURI_SIGNING_PRIVATE_KEY is not set or empty!"
+            echo "If you removed 'environment: production', make sure your secrets are in Repository Secrets, not Environment Secrets."
+            exit 1
+          else
+            echo "TAURI_SIGNING_PRIVATE_KEY is found."
+          fi
+
       - name: Build and Create Release
         uses: tauri-apps/tauri-action@v0
         env:
