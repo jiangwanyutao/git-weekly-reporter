@@ -3,10 +3,10 @@ import { Home, Settings, FileText, FolderPlus, History, RefreshCcw } from 'lucid
 import { handleWindowDrag, TITLEBAR_HEIGHT } from '@/components/TitleBar';
 import { useAppStore } from '@/store';
 import { open } from '@tauri-apps/plugin-dialog';
-import { check } from '@tauri-apps/plugin-updater';
 import { toast } from '@/hooks/use-toast';
 import { getVersion } from '@tauri-apps/api/app';
 import { useState, useEffect } from 'react';
+import { useUpdateDialog } from '@/components/UpdateDialog';
 import {
   Sidebar,
   SidebarContent,
@@ -27,6 +27,7 @@ export function AppSidebar() {
   const location = useLocation();
   const { addProject } = useAppStore();
   const [version, setVersion] = useState('1.0.0');
+  const { checkForUpdate, UpdateDialog } = useUpdateDialog();
 
   useEffect(() => {
     if (isTauri) {
@@ -85,46 +86,7 @@ export function AppSidebar() {
       toast({ title: "检查更新", description: "Web模式下不支持检查更新" });
       return;
     }
-
-    try {
-      const update = await check();
-      console.log(update,'update')
-      if (update) {
-        toast({
-          title: "发现新版本",
-          description: `版本: ${update.version}\n内容: ${update.body || '无更新日志'}`,
-          action: (
-            <div className="flex flex-col gap-2 mt-2 w-full">
-              <button
-                className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-8 px-3"
-                onClick={async () => {
-                  try {
-                    await update.downloadAndInstall();
-                    // Optional: relaunch()
-                  } catch (e) {
-                    console.error(e);
-                    toast({ title: "更新失败", description: "请重试或手动下载", variant: "destructive" });
-                  }
-                }}
-              >
-                立即更新
-              </button>
-            </div>
-          ),
-          duration: 10000,
-        });
-      } else {
-        toast({ title: "检查更新", description: "当前已是最新版本" });
-      }
-    } catch (error) {
-      console.error(error);
-      // 忽略部分已知错误，例如配置未完成导致的错误，给用户更友好的提示
-      toast({
-        title: "检查更新失败",
-        description: "请检查网络或更新配置",
-        variant: "destructive"
-      });
-    }
+    checkForUpdate();
   };
 
   return (
@@ -185,6 +147,7 @@ export function AppSidebar() {
           @江晚正愁余 V{version}
         </div>
       </SidebarFooter>
+      <UpdateDialog />
     </Sidebar>
   );
 }
