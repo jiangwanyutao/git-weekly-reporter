@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { check, Update } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 import {
@@ -51,54 +51,77 @@ export function useUpdateDialog() {
       }
     } catch (error: any) {
       console.error(error);
-      setState(prev => ({ 
-        ...prev, 
-        status: 'error', 
-        error: error.message || '检查更新失败' 
+      setState(prev => ({
+        ...prev,
+        status: 'error',
+        error: error.message || '检查更新失败'
       }));
     }
   };
+
+  // Use refs to track progress state without triggering re-renders
+  const progressRef = useRef({
+    total: 0,
+    downloaded: 0,
+    lastUpdateTime: 0,
+    lastUpdateProgress: 0,
+  });
 
   const startDownload = async () => {
     if (!state.update) return;
 
     setState(prev => ({ ...prev, status: 'downloading', progress: 0 }));
 
+    // Reset progress ref
+    progressRef.current = {
+      total: 0,
+      downloaded: 0,
+      lastUpdateTime: 0,
+      lastUpdateProgress: 0,
+    };
+
     try {
       await state.update.downloadAndInstall((event) => {
         switch (event.event) {
           case 'Started':
-            setState(prev => ({ 
-              ...prev, 
-              totalSize: event.data.contentLength || 0 
+            progressRef.current.total = event.data.contentLength || 0;
+            setState(prev => ({
+              ...prev,
+              totalSize: progressRef.current.total
             }));
             break;
           case 'Progress':
-            setState(prev => {
-              const downloaded = prev.downloadedSize + event.data.chunkLength;
-              const progress = prev.totalSize > 0 
-                ? Math.round((downloaded / prev.totalSize) * 100) 
-                : 0;
-              return {
+            progressRef.current.downloaded += event.data.chunkLength;
+
+            const { total, downloaded, lastUpdateTime, lastUpdateProgress } = progressRef.current;
+            const progress = total > 0 ? Math.round((downloaded / total) * 100) : 0;
+            const now = Date.now();
+
+            // Throttle UI updates: update only if progress increased by >=1% OR >100ms passed
+            if (progress > lastUpdateProgress || (now - lastUpdateTime) > 100) {
+              progressRef.current.lastUpdateTime = now;
+              progressRef.current.lastUpdateProgress = progress;
+
+              setState(prev => ({
                 ...prev,
                 downloadedSize: downloaded,
                 progress,
-              };
-            });
+              }));
+            }
             break;
           case 'Finished':
             setState(prev => ({ ...prev, status: 'ready', progress: 100 }));
             break;
         }
       });
-      
+
       setState(prev => ({ ...prev, status: 'ready', progress: 100 }));
     } catch (error: any) {
       console.error(error);
-      setState(prev => ({ 
-        ...prev, 
-        status: 'error', 
-        error: error.message || '下载更新失败' 
+      setState(prev => ({
+        ...prev,
+        status: 'error',
+        error: error.message || '下载更新失败'
       }));
     }
   };
@@ -108,8 +131,8 @@ export function useUpdateDialog() {
       await relaunch();
     } catch (error) {
       console.error(error);
-      toast({ 
-        title: '重启失败', 
+      toast({
+        title: '重启失败',
         description: '请手动关闭并重新打开应用',
         variant: 'destructive'
       });
