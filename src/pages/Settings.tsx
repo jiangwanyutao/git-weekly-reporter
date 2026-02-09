@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useAppStore } from '@/store';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { FolderPlus, Trash2, Save, Pencil, Key, MessageSquare, Folder, Info, RefreshCw, Download } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { check } from '@tauri-apps/plugin-updater';
@@ -36,16 +36,21 @@ export default function SettingsPage() {
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [updating, setUpdating] = useState(false);
 
-  useState(() => {
+  // 当 zustand 持久化状态恢复后，同步 localSettings
+  useEffect(() => {
+    setLocalSettings(settings);
+  }, [settings]);
+
+  useEffect(() => {
     if (isTauri) {
       getVersion().then(setVersion);
     }
-  });
+  }, []);
 
   const handleCheckUpdate = async () => {
     if (!isTauri) {
-        toast({ title: "Web 模式", description: "请在客户端中检查更新" });
-        return;
+      toast({ title: "Web 模式", description: "请在客户端中检查更新" });
+      return;
     }
     setCheckingUpdate(true);
     try {
@@ -112,7 +117,7 @@ export default function SettingsPage() {
         // However, standard zustand updates are sync.
         const newProject = useAppStore.getState().projects.find(p => p.path === selected);
         if (newProject) {
-            openAliasDialog(newProject.id, newProject.alias || newProject.name);
+          openAliasDialog(newProject.id, newProject.alias || newProject.name);
         }
       }
     } catch (err: any) {
@@ -143,8 +148,8 @@ export default function SettingsPage() {
   return (
     <div className="h-full flex flex-col p-6 space-y-6 overflow-hidden">
       <div className="flex justify-between items-center shrink-0">
-         <h1 className="text-3xl font-bold">系统配置</h1>
-         <Button onClick={handleSave} size="lg">
+        <h1 className="text-3xl font-bold">系统配置</h1>
+        <Button onClick={handleSave} size="lg">
           <Save className="mr-2 h-4 w-4" />
           保存所有配置
         </Button>
@@ -316,8 +321,8 @@ export default function SettingsPage() {
                       <div className="flex gap-2">
                         {updateAvailable ? (
                           <Button onClick={handleUpdate} disabled={updating}>
-                             {updating ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-                             {updating ? '更新中...' : `更新到 v${updateAvailable.version}`}
+                            {updating ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                            {updating ? '更新中...' : `更新到 v${updateAvailable.version}`}
                           </Button>
                         ) : (
                           <Button variant="outline" onClick={handleCheckUpdate} disabled={checkingUpdate}>
@@ -329,14 +334,14 @@ export default function SettingsPage() {
                     </div>
 
                     <div className="space-y-2">
-                        <h3 className="font-medium">更新说明</h3>
-                        <p className="text-sm text-muted-foreground leading-relaxed">
-                            本项目已配置支持 GitHub Actions 自动构建。
-                            <br />
-                            当仓库推送 v* 标签（如 v1.0.1）时，会自动构建 Release 并发布更新。
-                            <br />
-                            客户端会自动检测 GitHub Release 中的最新版本。
-                        </p>
+                      <h3 className="font-medium">更新说明</h3>
+                      <p className="text-sm text-muted-foreground leading-relaxed">
+                        本项目已配置支持 GitHub Actions 自动构建。
+                        <br />
+                        当仓库推送 v* 标签（如 v1.0.1）时，会自动构建 Release 并发布更新。
+                        <br />
+                        客户端会自动检测 GitHub Release 中的最新版本。
+                      </p>
                     </div>
                   </CardContent>
                 </Card>

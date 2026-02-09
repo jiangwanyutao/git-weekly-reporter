@@ -56,18 +56,37 @@ export default function Dashboard() {
     to: dayjs().endOf('week').subtract(1, 'day').toDate(), // 周五
   });
 
-  // Load authors when projects change
+  // 加载所有项目的作者列表
+  const loadAuthors = async (projectsList: typeof projects) => {
+    if (projectsList.length === 0) {
+      setAuthors([]);
+      return;
+    }
+    const allAuthors = new Set<string>();
+    for (const p of projectsList) {
+      const projAuthors = await getProjectAuthors(p.path);
+      projAuthors.forEach(a => allAuthors.add(a));
+    }
+    setAuthors(Array.from(allAuthors));
+  };
+
+  // 当 projects 变化时加载作者（包括初次渲染和后续更新）
   useEffect(() => {
-    const loadAuthors = async () => {
-      const allAuthors = new Set<string>();
-      for (const p of projects) {
-        const projAuthors = await getProjectAuthors(p.path);
-        projAuthors.forEach(a => allAuthors.add(a));
-      }
-      setAuthors(Array.from(allAuthors));
-    };
-    if (projects.length > 0) loadAuthors();
+    loadAuthors(projects);
   }, [projects]);
+
+  // 订阅 zustand 状态恢复，确保在持久化数据恢复后也能加载作者
+  useEffect(() => {
+    const unsubscribe = useAppStore.subscribe(
+      (state) => {
+        // 当持久化数据恢复后，projects 会从空数组变为有值
+        if (state.projects.length > 0 && authors.length === 0) {
+          loadAuthors(state.projects);
+        }
+      }
+    );
+    return () => unsubscribe();
+  }, [authors.length]);
 
   // 组件卸载时中断请求
   useEffect(() => {
@@ -491,8 +510,8 @@ export default function Dashboard() {
                       <span>{generatedReport ? 'AI 生成结果' : '点击生成按钮开始'}</span>
                       {logs.length > 0 && (
                         <>
-                           <span className="flex items-center gap-1" title="提交总数"><GitCommit className="h-3 w-3"/> {logs.length}</span>
-                           <span className="flex items-center gap-1" title="涉及分支"><GitBranch className="h-3 w-3"/> {Array.from(new Set(logs.map(l=>l.branch).filter(Boolean))).length} 分支</span>
+                          <span className="flex items-center gap-1" title="提交总数"><GitCommit className="h-3 w-3" /> {logs.length}</span>
+                          <span className="flex items-center gap-1" title="涉及分支"><GitBranch className="h-3 w-3" /> {Array.from(new Set(logs.map(l => l.branch).filter(Boolean))).length} 分支</span>
                         </>
                       )}
                     </CardDescription>
