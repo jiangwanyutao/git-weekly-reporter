@@ -7,7 +7,7 @@ import { CommitLog, Report } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { toast } from '@/hooks/use-toast';
-import { Loader2, RefreshCw, Sparkles, StopCircle, CheckCircle2, Circle, GitCommit, FileText, Activity, Calendar, GitBranch } from 'lucide-react';
+import { Loader2, RefreshCw, Sparkles, StopCircle, CheckCircle2, Circle, GitCommit, FileText, Activity, Calendar, GitBranch, GripVertical } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
@@ -18,11 +18,7 @@ import dayjs from 'dayjs';
 import { DatePickerWithRange } from '@/components/ui/date-range-picker';
 import { DateRange } from "react-day-picker";
 import ReactMarkdown from 'react-markdown';
-import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-} from "@/components/ui/resizable"
+
 
 type AgentStep = {
   id: string;
@@ -55,6 +51,38 @@ export default function Dashboard() {
     from: dayjs().startOf('week').add(1, 'day').toDate(), // 周一
     to: dayjs().endOf('week').subtract(1, 'day').toDate(), // 周五
   });
+
+  // 拖拽分隔条相关状态
+  const [leftPanelWidth, setLeftPanelWidth] = useState(40); // 百分比
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isDraggingRef = useRef(false);
+
+  // 拖拽处理函数
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    isDraggingRef.current = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDraggingRef.current || !containerRef.current) return;
+      const containerRect = containerRef.current.getBoundingClientRect();
+      const newWidth = ((e.clientX - containerRect.left) / containerRect.width) * 100;
+      // 限制在 20% - 70% 之间
+      setLeftPanelWidth(Math.min(70, Math.max(20, newWidth)));
+    };
+
+    const handleMouseUp = () => {
+      isDraggingRef.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
 
   // 加载所有项目的作者列表
   const loadAuthors = async (projectsList: typeof projects) => {
@@ -382,50 +410,50 @@ export default function Dashboard() {
         </div>
 
         {/* 统计卡片区域 */}
-        <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-4">
-          <Card className="p-3">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+          <Card className="p-3 stat-card gradient-border cursor-default">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 p-0 pb-1">
               <CardTitle className="text-sm font-medium">本周提交</CardTitle>
-              <GitCommit className="h-4 w-4 text-muted-foreground" />
+              <GitCommit className="h-4 w-4 text-primary" />
             </CardHeader>
             <CardContent className="p-0">
-              <div className="text-xl font-bold">{logs.length}</div>
+              <div className="text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">{logs.length}</div>
               <p className="text-[10px] text-muted-foreground mt-0.5">
                 基于当前筛选范围
               </p>
             </CardContent>
           </Card>
-          <Card className="p-3">
+          <Card className="p-3 stat-card gradient-border cursor-default">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 p-0 pb-1">
               <CardTitle className="text-sm font-medium">已生成报告</CardTitle>
-              <FileText className="h-4 w-4 text-muted-foreground" />
+              <FileText className="h-4 w-4 text-secondary" />
             </CardHeader>
             <CardContent className="p-0">
-              <div className="text-xl font-bold">{reports.length}</div>
+              <div className="text-2xl font-bold bg-gradient-to-r from-secondary to-primary bg-clip-text text-transparent">{reports.length}</div>
               <p className="text-[10px] text-muted-foreground mt-0.5">
                 历史总计
               </p>
             </CardContent>
           </Card>
-          <Card className="p-3">
+          <Card className="p-3 stat-card gradient-border cursor-default">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 p-0 pb-1">
               <CardTitle className="text-sm font-medium">活跃项目</CardTitle>
-              <Activity className="h-4 w-4 text-muted-foreground" />
+              <Activity className="h-4 w-4 text-chart-3" />
             </CardHeader>
             <CardContent className="p-0">
-              <div className="text-xl font-bold">{activeProjectsCount}</div>
+              <div className="text-2xl font-bold">{activeProjectsCount}</div>
               <p className="text-[10px] text-muted-foreground mt-0.5">
                 有提交记录的项目
               </p>
             </CardContent>
           </Card>
-          <Card className="p-3">
+          <Card className="p-3 stat-card gradient-border cursor-default">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 p-0 pb-1">
               <CardTitle className="text-sm font-medium">本周天数</CardTitle>
-              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <Calendar className="h-4 w-4 text-chart-4" />
             </CardHeader>
             <CardContent className="p-0">
-              <div className="text-xl font-bold">{daysInWeek}</div>
+              <div className="text-2xl font-bold">{daysInWeek}</div>
               <p className="text-[10px] text-muted-foreground mt-0.5">
                 当前统计周期
               </p>
@@ -434,176 +462,181 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="flex-1 min-h-0">
-        <ResizablePanelGroup className="h-full rounded-lg border">
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <div ref={containerRef} className="h-full rounded-lg border flex">
           {/* 左侧：提交记录列表 (按项目分组) */}
-          <ResizablePanel defaultSize={40} minSize={30}>
-            <div className="h-full flex flex-col">
-              <Card className="flex flex-col h-full shadow-none border-0">
-                <CardHeader className="pb-3 shrink-0 px-2 pt-2">
-                  <CardTitle>提交记录</CardTitle>
-                  <CardDescription>
-                    {formatDate(dateRange?.from)} 至 {formatDate(dateRange?.to)}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="flex-1 min-h-0 p-0 overflow-hidden">
-                  <ScrollArea className="h-full">
-                    <div className="p-2 space-y-4">
-                      {logs.length === 0 ? (
-                        <div className="text-center py-12 text-muted-foreground">
-                          暂无数据，请检查日期范围或刷新
-                        </div>
-                      ) : (
-                        Object.entries(groupedLogs).map(([project, projectLogs]) => (
-                          <div key={project} className="space-y-2 border rounded-md px-2 bg-card">
-                            <div className="sticky top-0 bg-card z-10 py-2 border-b flex items-center justify-between">
-                              <h3 className="font-semibold text-sm flex items-center">
-                                <Badge variant="secondary" className="mr-2">{project}</Badge>
-                                <span className="text-muted-foreground text-xs">({projectLogs.length} commits)</span>
-                              </h3>
-                            </div>
-                            <div className="max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                              <div className="space-y-1">
-                                {projectLogs.map((log) => (
-                                  <div key={log.hash} className="text-sm p-2 hover:bg-accent hover:text-accent-foreground rounded-md transition-colors group">
-                                    <div className="flex justify-between items-start gap-2">
-                                      <div className="flex flex-col gap-1 min-w-0">
-                                        <span className="font-medium break-all leading-snug">{log.message}</span>
-                                        {log.branch && (
-                                          <div className="flex items-center gap-1 text-[10px] text-muted-foreground group-hover:text-accent-foreground/80">
-                                            <GitBranch className="h-3 w-3" />
-                                            <span>{log.branch}</span>
-                                          </div>
-                                        )}
-                                      </div>
-                                      <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0 opacity-70 group-hover:text-accent-foreground group-hover:opacity-100">
-                                        {dayjs(log.date).format('MM-DD HH:mm')}
-                                      </span>
+          <div
+            className="h-full flex flex-col overflow-hidden"
+            style={{ width: `${leftPanelWidth}%` }}
+          >
+            <Card className="flex flex-col h-full shadow-none border-0">
+              <CardHeader className="pb-3 shrink-0 px-2 pt-2">
+                <CardTitle>提交记录</CardTitle>
+                <CardDescription>
+                  {formatDate(dateRange?.from)} 至 {formatDate(dateRange?.to)}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex-1 min-h-0 p-0 overflow-hidden">
+                <ScrollArea className="h-full">
+                  <div className="p-2 space-y-4">
+                    {logs.length === 0 ? (
+                      <div className="text-center py-12 text-muted-foreground">
+                        暂无数据，请检查日期范围或刷新
+                      </div>
+                    ) : (
+                      Object.entries(groupedLogs).map(([project, projectLogs]) => (
+                        <div key={project} className="space-y-2 border rounded-md px-2 bg-card">
+                          <div className="sticky top-0 bg-card z-10 py-2 border-b flex items-center justify-between">
+                            <h3 className="font-semibold text-sm flex items-center">
+                              <Badge variant="secondary" className="mr-2">{project}</Badge>
+                              <span className="text-muted-foreground text-xs">({projectLogs.length} commits)</span>
+                            </h3>
+                          </div>
+                          <div className="max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                            <div className="space-y-1">
+                              {projectLogs.map((log) => (
+                                <div key={log.hash} className="text-sm p-2 rounded-md commit-item group">
+                                  <div className="flex justify-between items-start gap-2">
+                                    <div className="flex flex-col gap-1 min-w-0">
+                                      <span className="font-medium break-all leading-snug">{log.message}</span>
+                                      {log.branch && (
+                                        <div className="flex items-center gap-1 text-[10px] text-muted-foreground group-hover:text-accent-foreground/80">
+                                          <GitBranch className="h-3 w-3" />
+                                          <span>{log.branch}</span>
+                                        </div>
+                                      )}
                                     </div>
+                                    <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0 opacity-70 group-hover:text-accent-foreground group-hover:opacity-100">
+                                      {dayjs(log.date).format('MM-DD HH:mm')}
+                                    </span>
                                   </div>
-                                ))}
-                              </div>
+                                </div>
+                              ))}
                             </div>
                           </div>
-                        ))
-                      )}
-                    </div>
-                  </ScrollArea>
-                </CardContent>
-              </Card>
-            </div>
-          </ResizablePanel>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </ScrollArea>
+              </CardContent>
+            </Card>
+          </div>
 
-          <ResizableHandle withHandle />
+          {/* 可拖拽的分隔条 */}
+          <div
+            onMouseDown={handleMouseDown}
+            className="w-1.5 h-full bg-border hover:bg-primary/50 cursor-col-resize flex items-center justify-center transition-colors shrink-0 group"
+          >
+            <GripVertical className="h-6 w-6 text-muted-foreground group-hover:text-primary" />
+          </div>
 
           {/* 右侧：生成结果预览 */}
-          <ResizablePanel defaultSize={60}>
-            <div className="h-full flex flex-col">
-              <Card className="flex flex-col h-full shadow-none border-0">
-                <CardHeader className="pb-3 border-b shrink-0 px-2 pt-2 flex flex-row items-center justify-between space-y-0">
-                  <div className="space-y-1">
-                    <CardTitle className="flex items-center gap-2">
-                      周报预览
-                      {generating && <Badge variant="secondary" className="animate-pulse">AI 生成中...</Badge>}
-                    </CardTitle>
-                    <CardDescription className="flex items-center gap-3">
-                      <span>{generatedReport ? 'AI 生成结果' : '点击生成按钮开始'}</span>
-                      {logs.length > 0 && (
-                        <>
-                          <span className="flex items-center gap-1" title="提交总数"><GitCommit className="h-3 w-3" /> {logs.length}</span>
-                          <span className="flex items-center gap-1" title="涉及分支"><GitBranch className="h-3 w-3" /> {Array.from(new Set(logs.map(l => l.branch).filter(Boolean))).length} 分支</span>
-                        </>
-                      )}
-                    </CardDescription>
-                  </div>
-                  {generating ? (
-                    <Button variant="destructive" size="sm" onClick={handleStopGenerate}>
-                      <StopCircle className="mr-2 h-4 w-4" />
-                      停止
-                    </Button>
-                  ) : (
-                    <Button size="sm" onClick={handleGenerate} disabled={logs.length === 0}>
-                      <Sparkles className="mr-2 h-4 w-4" />
-                      生成周报
-                    </Button>
-                  )}
-                </CardHeader>
-                <CardContent className="flex-1 min-h-0 p-2 overflow-hidden rounded-b-lg">
-                  {generatedReport || reasoning || generating || agentSteps.length > 0 ? (
-                    <ScrollArea className="h-full pr-4">
-                      {/* Agent Steps */}
-                      {agentSteps.length > 0 && (
-                        <div className="space-y-4 mb-4">
-                          {agentSteps.map(step => (
-                            <Task key={step.id} defaultOpen={step.status === 'running' || step.status === 'failed'}>
-                              <TaskTrigger title={step.title} className="w-full">
-                                <div className="flex items-center gap-2">
-                                  {step.status === 'running' && <Loader2 className="h-4 w-4 animate-spin text-blue-500" />}
-                                  {step.status === 'completed' && <CheckCircle2 className="h-4 w-4 text-green-500" />}
-                                  {step.status === 'failed' && <Circle className="h-4 w-4 text-red-500" />}
-                                  {step.status === 'pending' && <Circle className="h-4 w-4 text-muted-foreground" />}
-                                  <span>{step.title}</span>
-                                </div>
-                              </TaskTrigger>
-                              <TaskContent>
-                                {step.details && <p className="text-muted-foreground mb-2 text-xs">{step.details}</p>}
-                                {step.tools?.map(tool => (
-                                  <Tool key={tool.id} className="mb-2">
-                                    <ToolHeader
-                                      type="function"
-                                      toolName={tool.name}
-                                      state={tool.state}
+          <div className="flex-1 h-full flex flex-col overflow-hidden">
+            <Card className="flex flex-col h-full shadow-none border-0">
+              <CardHeader className="pb-3 border-b shrink-0 px-2 pt-2 flex flex-row items-center justify-between space-y-0">
+                <div className="space-y-1">
+                  <CardTitle className="flex items-center gap-2">
+                    周报预览
+                    {generating && <Badge variant="secondary" className="animate-pulse">AI 生成中...</Badge>}
+                  </CardTitle>
+                  <CardDescription className="flex items-center gap-3">
+                    <span>{generatedReport ? 'AI 生成结果' : '点击生成按钮开始'}</span>
+                    {logs.length > 0 && (
+                      <>
+                        <span className="flex items-center gap-1" title="提交总数"><GitCommit className="h-3 w-3" /> {logs.length}</span>
+                        <span className="flex items-center gap-1" title="涉及分支"><GitBranch className="h-3 w-3" /> {Array.from(new Set(logs.map(l => l.branch).filter(Boolean))).length} 分支</span>
+                      </>
+                    )}
+                  </CardDescription>
+                </div>
+                {generating ? (
+                  <Button variant="destructive" size="sm" onClick={handleStopGenerate}>
+                    <StopCircle className="mr-2 h-4 w-4" />
+                    停止
+                  </Button>
+                ) : (
+                  <Button size="sm" onClick={handleGenerate} disabled={logs.length === 0} className="glow-button">
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    生成周报
+                  </Button>
+                )}
+              </CardHeader>
+              <CardContent className="flex-1 min-h-0 p-2 overflow-hidden rounded-b-lg">
+                {generatedReport || reasoning || generating || agentSteps.length > 0 ? (
+                  <ScrollArea className="h-full pr-4">
+                    {/* Agent Steps */}
+                    {agentSteps.length > 0 && (
+                      <div className="space-y-4 mb-4">
+                        {agentSteps.map(step => (
+                          <Task key={step.id} defaultOpen={step.status === 'running' || step.status === 'failed'}>
+                            <TaskTrigger title={step.title} className="w-full">
+                              <div className="flex items-center gap-2">
+                                {step.status === 'running' && <Loader2 className="h-4 w-4 animate-spin text-blue-500" />}
+                                {step.status === 'completed' && <CheckCircle2 className="h-4 w-4 text-green-500" />}
+                                {step.status === 'failed' && <Circle className="h-4 w-4 text-red-500" />}
+                                {step.status === 'pending' && <Circle className="h-4 w-4 text-muted-foreground" />}
+                                <span>{step.title}</span>
+                              </div>
+                            </TaskTrigger>
+                            <TaskContent>
+                              {step.details && <p className="text-muted-foreground mb-2 text-xs">{step.details}</p>}
+                              {step.tools?.map(tool => (
+                                <Tool key={tool.id} className="mb-2">
+                                  <ToolHeader
+                                    type="function"
+                                    toolName={tool.name}
+                                    state={tool.state}
+                                  />
+                                  <ToolContent>
+                                    <ToolInput input={tool.input} />
+                                    <ToolOutput
+                                      output={JSON.stringify(tool.output, null, 2)}
+                                      errorText={tool.state === 'failed' ? 'Tool execution failed' : undefined}
                                     />
-                                    <ToolContent>
-                                      <ToolInput input={tool.input} />
-                                      <ToolOutput
-                                        output={JSON.stringify(tool.output, null, 2)}
-                                        errorText={tool.state === 'failed' ? 'Tool execution failed' : undefined}
-                                      />
-                                    </ToolContent>
-                                  </Tool>
-                                ))}
-                              </TaskContent>
-                            </Task>
-                          ))}
-                        </div>
-                      )}
+                                  </ToolContent>
+                                </Tool>
+                              ))}
+                            </TaskContent>
+                          </Task>
+                        ))}
+                      </div>
+                    )}
 
-                      {/* 推理过程展示 */}
-                      {(reasoning || generating) && (
-                        <Reasoning isStreaming={generating && !generatedReport}>
-                          <ReasoningTrigger />
-                          <ReasoningContent>{reasoning}</ReasoningContent>
-                        </Reasoning>
-                      )}
+                    {/* 推理过程展示 */}
+                    {(reasoning || generating) && (
+                      <Reasoning isStreaming={generating && !generatedReport}>
+                        <ReasoningTrigger />
+                        <ReasoningContent>{reasoning}</ReasoningContent>
+                      </Reasoning>
+                    )}
 
-                      {generatedReport && (
-                        <div className="prose prose-sm dark:prose-invert max-w-none mt-4">
-                          <ReactMarkdown>{generatedReport}</ReactMarkdown>
-                          {generating && <span className="inline-block w-2 h-4 ml-1 bg-primary animate-pulse" />}
-                        </div>
-                      )}
-                    </ScrollArea>
-                  ) : (
-                    <div className="h-full flex flex-col items-center justify-center text-muted-foreground space-y-4">
-                      {generating ? (
-                        <>
-                          <Loader2 className="h-12 w-12 animate-spin text-primary" />
-                          <p>正在思考并撰写周报...</p>
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="h-12 w-12 opacity-20" />
-                          <p>准备好数据后，点击生成按钮</p>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-          </ResizablePanel>
-        </ResizablePanelGroup>
+                    {generatedReport && (
+                      <div className="prose prose-sm dark:prose-invert max-w-none mt-4">
+                        <ReactMarkdown>{generatedReport}</ReactMarkdown>
+                        {generating && <span className="inline-block w-2 h-4 ml-1 bg-primary animate-pulse" />}
+                      </div>
+                    )}
+                  </ScrollArea>
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center text-muted-foreground space-y-4">
+                    {generating ? (
+                      <>
+                        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+                        <p>正在思考并撰写周报...</p>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-12 w-12 opacity-20" />
+                        <p>准备好数据后，点击生成按钮</p>
+                      </>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       </div>
     </div>
   );

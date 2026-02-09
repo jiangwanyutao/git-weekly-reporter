@@ -4,82 +4,104 @@
 
 @layer base {
   :root {
-    --background: 0 0% 97.6471%;
-    --foreground: 0 0% 20%;
+    /* 清新的浅色背景 */
+    --background: 220 20% 97%;
+    --foreground: 222 47% 11%;
+
+    /* 干净的白色卡片 */
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 20%;
+    --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 20%;
-    --primary: 246.9065 74.3316% 63.3333%;
+    --popover-foreground: 222 47% 11%;
+
+    /* 紫色主题 */
+    --primary: 250 89% 55%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 210.3704 75.7009% 79.0196%;
-    --secondary-foreground: 0 0% 20%;
-    --muted: 45.0000 15.6250% 74.9020%;
-    --muted-foreground: 0 0% 43.1373%;
-    --accent: 246.9065 74.3316% 63.3333%;
-    --accent-foreground: 0 0% 100%;
-    --destructive: 0 84.2365% 60.1961%;
+
+    /* 蓝色补充色 */
+    --secondary: 217 91% 50%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 220 15% 90%;
+    --muted-foreground: 222 20% 40%;
+
+    --accent: 250 60% 96%;
+    --accent-foreground: 250 89% 45%;
+
+    --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 83.1373%;
-    --input: 0 0% 83.1373%;
-    --ring: 246.9065 74.3316% 63.3333%;
+
+    --border: 220 15% 88%;
+    --input: 220 15% 88%;
+    --ring: 250 89% 55%;
     --radius: 0.5rem;
 
-    /* Charts */
-    --chart-1: 246.9065 74.3316% 63.3333%;
-    --chart-2: 282.2857 43.5685% 47.2549%;
-    --chart-3: 274.6154 100% 25.4902%;
-    --chart-4: 218.5401 79.1908% 66.0784%;
-    --chart-5: 207.2727 44% 49.0196%;
+    /* Charts - 协调的图表配色 */
+    --chart-1: 250 89% 55%;
+    --chart-2: 217 91% 50%;
+    --chart-3: 199 89% 48%;
+    --chart-4: 172 66% 50%;
+    --chart-5: 292 84% 55%;
 
     /* Sidebar */
-    --sidebar-background: 0 0% 97.6471%;
-    --sidebar-foreground: 0 0% 20%;
-    --sidebar-primary: 246.9065 74.3316% 63.3333%;
+    --sidebar-background: 220 20% 97%;
+    --sidebar-foreground: 222 47% 11%;
+    --sidebar-primary: 250 89% 55%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 72.0000 17.9283% 49.2157%;
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 0 0% 83.1373%;
-    --sidebar-ring: 246.9065 74.3316% 63.3333%;
+    --sidebar-accent: 250 60% 96%;
+    --sidebar-accent-foreground: 250 89% 45%;
+    --sidebar-border: 220 15% 88%;
+    --sidebar-ring: 250 89% 55%;
   }
 
   .dark {
-    --background: 220.0000 14.7541% 11.9608%;
-    --foreground: 0 0% 89.8039%;
-    --card: 197.1429 6.9307% 19.8039%;
-    --card-foreground: 0 0% 89.8039%;
-    --popover: 197.1429 6.9307% 19.8039%;
-    --popover-foreground: 0 0% 89.8039%;
-    --primary: 246.9065 74.3316% 63.3333%;
+    /* 更深的蓝黑色背景，减少视觉疲劳 */
+    --background: 222 47% 11%;
+    --foreground: 210 40% 98%;
+
+    /* 带蓝调的卡片，增加层次感 */
+    --card: 217 33% 17%;
+    --card-foreground: 210 40% 98%;
+    --popover: 217 33% 17%;
+    --popover-foreground: 210 40% 98%;
+
+    /* 保持紫色主题 */
+    --primary: 250 89% 65%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 274.6154 100% 25.4902%;
-    --secondary-foreground: 0 0% 89.8039%;
-    --muted: 0 0% 26.6667%;
-    --muted-foreground: 0 0% 63.9216%;
-    --accent: 246.9065 74.3316% 55%;
-    --accent-foreground: 0 0% 89.8039%;
-    --destructive: 0 84.2365% 60.1961%;
+
+    /* 蓝色作为补充色 */
+    --secondary: 217 91% 60%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217 33% 25%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 250 89% 55%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 63% 55%;
     --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 26.6667%;
-    --input: 0 0% 26.6667%;
-    --ring: 246.9065 74.3316% 63.3333%;
 
-    /* Charts */
-    --chart-1: 246.9065 74.3316% 63.3333%;
-    --chart-2: 282.2857 43.5685% 47.2549%;
-    --chart-3: 274.6154 100% 25.4902%;
-    --chart-4: 218.5401 79.1908% 66.0784%;
-    --chart-5: 207.2727 44% 49.0196%;
+    --border: 217 33% 25%;
+    --input: 217 33% 25%;
+    --ring: 250 89% 65%;
 
-    /* Sidebar */
-    --sidebar-background: 220.0000 14.7541% 11.9608%;
-    --sidebar-foreground: 0 0% 89.8039%;
-    --sidebar-primary: 246.9065 74.3316% 63.3333%;
+    /* Charts - 更协调的图表配色 */
+    --chart-1: 250 89% 65%;
+    --chart-2: 217 91% 60%;
+    --chart-3: 199 89% 48%;
+    --chart-4: 172 66% 50%;
+    --chart-5: 292 84% 60%;
+
+    /* Sidebar - 玻璃拟态效果 */
+    --sidebar-background: 222 47% 11%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 250 89% 65%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 218.5401 79.1908% 66.0784%;
-    --sidebar-accent-foreground: 0 0% 89.8039%;
-    --sidebar-border: 0 0% 26.6667%;
-    --sidebar-ring: 246.9065 74.3316% 63.3333%;
+    --sidebar-accent: 217 91% 60%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 217 33% 25%;
+    --sidebar-ring: 250 89% 65%;
   }
 }
 
@@ -92,5 +114,92 @@
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
     font-family: "Montserrat", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+}
+
+/* 增强效果 - 玻璃拟态 */
+@layer components {
+  .glass-card {
+    @apply backdrop-blur-xl bg-card/80 border border-border/50;
+  }
+
+  .glass-sidebar {
+    @apply backdrop-blur-xl bg-sidebar-background/90;
+  }
+
+  /* 渐变边框效果 */
+  .gradient-border {
+    position: relative;
+  }
+
+  .gradient-border::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--secondary)) 50%, hsl(var(--primary)) 100%);
+    -webkit-mask:
+      linear-gradient(#fff 0 0) content-box,
+      linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+    opacity: 0.5;
+    transition: opacity 0.3s ease;
+  }
+
+  .gradient-border:hover::before {
+    opacity: 1;
+  }
+
+  /* 发光按钮效果 */
+  .glow-button {
+    @apply relative overflow-hidden;
+    box-shadow: 0 0 20px -5px hsl(var(--primary) / 0.5);
+    transition: box-shadow 0.3s ease;
+  }
+
+  .glow-button:hover {
+    box-shadow: 0 0 30px -5px hsl(var(--primary) / 0.8);
+  }
+
+  /* 统计卡片悬停效果 */
+  .stat-card {
+    @apply transition-all duration-300 ease-out;
+  }
+
+  .stat-card:hover {
+    @apply -translate-y-0.5;
+    box-shadow: 0 8px 30px -10px hsl(var(--primary) / 0.3);
+  }
+
+  /* 提交记录项 */
+  .commit-item {
+    @apply transition-all duration-200;
+    border-left: 2px solid transparent;
+  }
+
+  .commit-item:hover {
+    border-left-color: hsl(var(--primary));
+    background: hsl(var(--accent) / 0.1);
+  }
+
+  /* 自定义滚动条 */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted));
+    border-radius: 3px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground));
   }
 }

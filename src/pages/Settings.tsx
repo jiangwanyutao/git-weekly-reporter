@@ -155,8 +155,8 @@ export default function SettingsPage() {
         </Button>
       </div>
 
-      <Tabs defaultValue="projects" className="flex-1 flex flex-col min-h-0">
-        <TabsList className="w-full justify-start border-b rounded-none h-auto p-0 bg-transparent gap-6">
+      <Tabs defaultValue="projects" className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        <TabsList className="w-full justify-start border-b rounded-none h-auto p-0 bg-background gap-6 shrink-0">
           <TabsTrigger
             value="projects"
             className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2 flex items-center gap-2"
@@ -187,7 +187,7 @@ export default function SettingsPage() {
           </TabsTrigger>
         </TabsList>
 
-        <div className="flex-1 min-h-0 mt-2">
+        <div className="flex-1 min-h-0 mt-2 overflow-auto">
           <TabsContent value="projects" className="h-full m-0 border-none p-0 data-[state=active]:flex flex-col">
             <ScrollArea className="flex-1">
               <div className="pr-4 pb-4">
@@ -212,7 +212,7 @@ export default function SettingsPage() {
                             <div>
                               <div className="font-medium flex items-center gap-2">
                                 {project.alias || project.name}
-                                {project.alias && <span className="text-xs text-muted-foreground font-normal">({project.name})</span>}
+                                {project.alias && <span className="text-xs text-muted-foreground font-normal transition-colors group-hover:text-accent-foreground/80">({project.name})</span>}
                               </div>
                               <div className="text-xs text-muted-foreground group-hover:text-accent-foreground/80 transition-colors">{project.path}</div>
                             </div>
