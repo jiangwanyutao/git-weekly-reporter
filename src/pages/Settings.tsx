@@ -5,12 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
 import { useAppStore } from '@/store';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { FolderPlus, Trash2, Save, Pencil, Key, MessageSquare, Folder, Info, RefreshCw, Download } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { toast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { check } from '@tauri-apps/plugin-updater';
 import { getVersion } from '@tauri-apps/api/app';
 import {
@@ -273,6 +275,96 @@ export default function SettingsPage() {
                         onChange={(e) => setLocalSettings({ ...localSettings, authorName: e.target.value })}
                         placeholder="例如: Zhang San"
                       />
+                    </div>
+                    <div className="rounded-lg border p-4 space-y-4 bg-card/50">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="space-y-1">
+                          <Label className="text-sm font-medium">Notion 自动同步</Label>
+                          <p className="text-xs text-muted-foreground">
+                            生成周报后按同步方式自动写入 Notion
+                          </p>
+                        </div>
+                        <Switch
+                          checked={localSettings.notionAutoSync}
+                          onCheckedChange={(checked) =>
+                            setLocalSettings((prev) => ({ ...prev, notionAutoSync: checked }))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Notion 同步方式</Label>
+                        <Select
+                          value={localSettings.notionSyncMode || 'append'}
+                          onValueChange={(value: 'append' | 'subpage') =>
+                            setLocalSettings((prev) => ({ ...prev, notionSyncMode: value }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="append">追加到父页面正文</SelectItem>
+                            <SelectItem value="subpage">创建父页面子页面</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground leading-relaxed">
+                          追加模式可直接在当前文档查看；子页面模式适合按周归档管理。
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Notion 内容格式</Label>
+                        <Select
+                          value={localSettings.notionContentMode || 'markdown'}
+                          onValueChange={(value: 'markdown' | 'code') =>
+                            setLocalSettings((prev) => ({ ...prev, notionContentMode: value }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="markdown">Markdown 块渲染</SelectItem>
+                            <SelectItem value="code">代码块原样保留</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground leading-relaxed">
+                          Markdown 块渲染会把标题、列表、引用和代码段转换成 Notion 块；代码块模式保留原始 Markdown 文本。
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Notion Integration Token</Label>
+                        <Input
+                          type="password"
+                          value={localSettings.notionApiKey}
+                          onChange={(e) => setLocalSettings({ ...localSettings, notionApiKey: e.target.value })}
+                          placeholder="ntn_xxx..."
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>目标父页面 ID 或 URL</Label>
+                        <Input
+                          value={localSettings.notionParentPageId}
+                          onChange={(e) => setLocalSettings({ ...localSettings, notionParentPageId: e.target.value })}
+                          placeholder="粘贴 Notion 页面链接或 Page ID"
+                        />
+                        <p className="text-xs text-muted-foreground leading-relaxed">
+                          请先在 Notion 中创建 内部集成 Integration，并将目标页面通过 Add connections 授权给该 Integration。
+                        </p>
+                        <p className="text-xs text-muted-foreground leading-relaxed">
+                          修改后请点击页面右上角“保存所有配置”，否则不会生效。
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Notion 代理地址（可选）</Label>
+                        <Input
+                          value={localSettings.notionProxyUrl}
+                          onChange={(e) => setLocalSettings({ ...localSettings, notionProxyUrl: e.target.value })}
+                          placeholder="例如Clash verge: http://127.0.0.1:7897"
+                        />
+                        <p className="text-xs text-muted-foreground leading-relaxed">
+                          如果网络无法直连 Notion，可填写本机代理地址。留空则直连。
+                        </p>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>

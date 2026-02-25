@@ -3,6 +3,7 @@ import { useEffect, useState, useRef, useMemo } from 'react';
 import { useAppStore } from '@/store';
 import { fetchGitLogs, getProjectContext, getProjectAuthors } from '@/lib/git';
 import { generateWeeklyReport } from '@/lib/glm';
+import { syncReportToNotion } from '@/lib/notion';
 import { CommitLog, Report } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -90,12 +91,14 @@ export default function Dashboard() {
       setAuthors([]);
       return;
     }
-    const allAuthors = new Set<string>();
-    for (const p of projectsList) {
-      const projAuthors = await getProjectAuthors(p.path);
-      projAuthors.forEach(a => allAuthors.add(a));
-    }
-    setAuthors(Array.from(allAuthors));
+    const authorLists = await Promise.all(
+      projectsList.map((p) => getProjectAuthors(p.path))
+    );
+    const allAuthors = Array.from(new Set(authorLists.flat().filter(Boolean)));
+    allAuthors.sort((a, b) =>
+      a.localeCompare(b, 'zh-Hans-CN', { sensitivity: 'base' })
+    );
+    setAuthors(allAuthors);
   };
 
   // 当 projects 变化时加载作者（包括初次渲染和后续更新）
@@ -130,15 +133,21 @@ export default function Dashboard() {
     if (projects.length === 0) return;
     setLoading(true);
     try {
-      const allLogs: CommitLog[] = [];
-
       const since = dateRange?.from ? dayjs(dateRange.from).format('YYYY-MM-DD HH:mm:ss') : undefined;
       const until = dateRange?.to ? dayjs(dateRange.to).endOf('day').format('YYYY-MM-DD HH:mm:ss') : undefined;
 
-      for (const project of projects) {
-        const projectLogs = await fetchGitLogs(project.path, settings.authorName, since, until, project.alias || project.name);
-        allLogs.push(...projectLogs);
-      }
+      const logsByProject = await Promise.all(
+        projects.map((project) =>
+          fetchGitLogs(
+            project.path,
+            settings.authorName,
+            since,
+            until,
+            project.alias || project.name
+          )
+        )
+      );
+      const allLogs: CommitLog[] = logsByProject.flat();
       // 按时间倒序
       allLogs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       setLogs(allLogs);
@@ -302,7 +311,26 @@ export default function Dashboard() {
       };
       addReport(newReport);
 
-      toast({ title: "周报生成成功", description: "已保存至历史记录" });
+      if (settings.notionAutoSync) {
+        try {
+          const notionResult = await syncReportToNotion(newReport, settings);
+          const syncDescription = settings.notionSyncMode === 'subpage'
+            ? '已保存至历史记录，并创建 Notion 子页面'
+            : '已保存至历史记录，并追加到 Notion 文档正文';
+          toast({
+            title: "周报生成成功",
+            description: notionResult.url ? syncDescription : "已保存至历史记录，并完成 Notion 同步",
+          });
+        } catch (syncError: any) {
+          toast({
+            title: "周报已保存",
+            description: `已保存至历史记录，${syncError.message || 'Notion 同步失败'}`,
+            variant: "destructive",
+          });
+        }
+      } else {
+        toast({ title: "周报生成成功", description: "已保存至历史记录" });
+      }
     } catch (error: any) {
       if (error.name === 'AbortError') {
         toast({ title: "生成已取消", description: "用户手动停止或切换页面" });
@@ -326,13 +354,18 @@ export default function Dashboard() {
     }
   };
 
+  const dateRangeFromTs = dateRange?.from?.getTime();
+  const dateRangeToTs = dateRange?.to?.getTime();
+
   useEffect(() => {
-    // 强制重新加载状态
+    // 仅在日期范围完整时自动刷新，避免只选开始日期就触发请求
+    if (!dateRangeFromTs || !dateRangeToTs) return;
+
     const state = useAppStore.getState();
     if (state.projects.length > 0) {
-      loadLogs();
+      void loadLogs();
     }
-  }, [projects, settings.authorName]); // 当项目列表或作者筛选变化时自动刷新
+  }, [projects, settings.authorName, dateRangeFromTs, dateRangeToTs]); // 项目/作者/日期变化时自动刷新
 
   // 按项目分组
   const groupedLogs = useMemo(() => {

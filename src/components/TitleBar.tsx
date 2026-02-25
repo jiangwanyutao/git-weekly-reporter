@@ -9,13 +9,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-const appWindow = getCurrentWindow();
+const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
 // 导出拖拽处理函数，供其他组件使用
 export const handleWindowDrag = (e: React.MouseEvent) => {
-  if (e.button === 0) {
-    appWindow.startDragging();
-  }
+  if (e.button !== 0 || !isTauri) return;
+  void getCurrentWindow().startDragging();
 };
 
 export const TITLEBAR_HEIGHT = 'h-10'; // 40px
@@ -55,9 +54,18 @@ export function TitleBar() {
     updateSettings({ theme: newTheme });
   };
 
-  const handleMinimize = () => appWindow.minimize();
-  const handleMaximize = () => appWindow.toggleMaximize();
-  const handleClose = () => appWindow.close();
+  const handleMinimize = () => {
+    if (!isTauri) return;
+    void getCurrentWindow().minimize();
+  };
+  const handleMaximize = () => {
+    if (!isTauri) return;
+    void getCurrentWindow().toggleMaximize();
+  };
+  const handleClose = () => {
+    if (!isTauri) return;
+    void getCurrentWindow().close();
+  };
 
   const themeIcon = {
     light: <Sun className="h-4 w-4" />,
@@ -104,27 +112,31 @@ export function TitleBar() {
         </DropdownMenu>
 
         {/* 窗口控制按钮 */}
-        <button
-          onClick={handleMinimize}
-          className="h-full px-4 hover:bg-muted transition-colors"
-          title="最小化"
-        >
-          <Minus className="h-4 w-4" />
-        </button>
-        <button
-          onClick={handleMaximize}
-          className="h-full px-4 hover:bg-muted transition-colors"
-          title="最大化"
-        >
-          <Square className="h-3.5 w-3.5" />
-        </button>
-        <button
-          onClick={handleClose}
-          className="h-full px-4 hover:bg-destructive hover:text-destructive-foreground transition-colors"
-          title="关闭"
-        >
-          <X className="h-4 w-4" />
-        </button>
+        {isTauri && (
+          <>
+            <button
+              onClick={handleMinimize}
+              className="h-full px-4 hover:bg-muted transition-colors"
+              title="最小化"
+            >
+              <Minus className="h-4 w-4" />
+            </button>
+            <button
+              onClick={handleMaximize}
+              className="h-full px-4 hover:bg-muted transition-colors"
+              title="最大化"
+            >
+              <Square className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={handleClose}
+              className="h-full px-4 hover:bg-destructive hover:text-destructive-foreground transition-colors"
+              title="关闭"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </>
+        )}
       </div>
     </div>
   );

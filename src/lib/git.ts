@@ -68,19 +68,24 @@ export async function fetchGitLogs(projectPath: string, author: string, since?: 
 
     const projectName = projectNameOverride || projectPath.split(/[\\/]/).pop() || 'Unknown';
 
-    return output.stdout.split('\n')
-      .filter(line => line.trim())
-      .map(line => {
-        const [hash, authorName, date, message] = line.split('|');
-        return {
-          hash,
-          author: authorName,
-          date,
-          message,
-          project: projectName,
-          branch: currentBranch
-        };
+    const logs: CommitLog[] = [];
+    for (const line of output.stdout.split('\n')) {
+      if (!line.trim()) continue;
+      const match = line.match(/^([^|]*)\|([^|]*)\|([^|]*)\|(.*)$/);
+      if (!match) continue;
+
+      const [, hash, authorName, date, message] = match;
+      logs.push({
+        hash,
+        author: authorName,
+        date,
+        message,
+        project: projectName,
+        branch: currentBranch
       });
+    }
+
+    return logs;
 
   } catch (error) {
     console.error(`Failed to fetch logs for ${projectPath}:`, error);

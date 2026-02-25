@@ -1,87 +1,104 @@
-# Git Weekly Reporter - 项目目标文档
+# Git Weekly Reporter
 
-## 1. 项目概述
+跨平台 AI 周报助手。应用会读取本地 Git 仓库提交记录，按项目聚合后调用 GLM 生成结构化周报，并保留历史记录供检索和导出。
 
-本项目旨在构建一个跨平台的桌面应用程序，用于帮助开发者自动收集、筛选并总结 Git 提交记录，生成周报。应用基于 Tauri 2.0 构建，采用 Next.js 作为前端框架，shadcn/ui 作为 UI 组件库。
+## 技术栈
 
-需要准备的环境：
+- 桌面壳: Tauri 2
+- 前端: Vite + React + TypeScript + React Router
+- 状态管理: Zustand（`persist`）
+- UI: shadcn/ui + Tailwind CSS
+- Git 调用: `@tauri-apps/plugin-shell` 执行系统 `git`
+- AI: 智谱 GLM（流式输出）
 
-- **智谱 GLM API 密钥** (用于生成周报总结) 自行去官方申请一个APIKEY填入即可。
+## 快速开始
 
-## 2. 技术栈
-
-- **Core**: Tauri 2.0 (Rust)
-- **Frontend**: Next.js (React), TypeScript
-- **UI**: shadcn/ui, Tailwind CSS
-- **Data Fetching**: Rust `Command` (调用系统 git) 或 `git2` crate
-- **State Management**: Zustand 或 React Context
-- **AI Integration**: 智谱 GLM 接口用于生成总结
-
-## 3. 核心功能模块
-
-### 3.1 项目管理 (Project Management)
-
-- **添加项目**: 用户可以通过文件选择器添加本地 Git 仓库路径。
-- **项目列表**: 展示已添加的项目，支持删除操作。
-- **持久化**: 项目列表需持久化存储（如 `tauri-plugin-store` 或本地 JSON）。
-
-### 3.2 提交记录查询 (Commit Query)
-
-- **时间筛选**:
-  - 快捷筛选: 本周 (This Week), 上周 (Last Week), 本月 (This Month), 今日 (Today)。
-  - 自定义范围: Date Picker 选择开始和结束日期。
-- **作者筛选**: 自动识别或手动输入 Git Author Name。
-- **多项目聚合**: 支持同时查询所有已添加项目的提交记录。
-
-### 3.3 数据展示 (Data Display)
-
-- **表格展示**: 使用 shadcn/ui `DataTable` 展示提交记录。
-- **列定义**: 项目名, 提交哈希 (Hash), 作者, 时间, 提交信息 (Message)。
-- **交互**: 支持按列排序、分页。
-
-### 3.4 智能总结 (AI Summary)
-
-- **提取**: 将筛选出的提交记录提取为纯文本格式。
-- **总结**: 提供 "生成周报" 按钮，调用 AI 接口将零散的 commit message 总结为结构化的周报内容。
-
-## 4. 实施路线图
-
-### Phase 1: 基础架构搭建 (Current)
-
-1. 初始化 Tauri 2.0 + Next.js 项目。
-2. 配置 shadcn/ui 环境。
-3. 实现 Rust 端 Git 命令调用接口。
-4. 实现前端项目管理界面 (添加/列表)。
-
-### Phase 2: 核心功能实现
-
-1. 实现时间筛选逻辑 (Day.js)。
-2. 集成 Data Table 展示 Git Log。
-3. 联调 Rust 与前端的数据交互。
-
-### Phase 3: 优化与 AI 集成
-
-1. 接入 AI 总结接口。
-2. UI/UX 优化 (Loading 状态, 错误处理)。
-3. 打包发布。
-
-## 5. 目录结构规范
-
+```bash
+pnpm install
 ```
+
+### 本地开发（Web 模式）
+
+```bash
+pnpm dev
+# 或
+pnpm web:dev
+```
+
+说明:
+- Web 模式下不访问本机 Git，`src/lib/git.ts` 会返回 mock 提交数据。
+- 适合调 UI 和交互流程。
+
+### 桌面开发（Tauri 模式）
+
+```bash
+pnpm tauri:dev
+```
+
+说明:
+- 可选择本地仓库目录。
+- 可调用系统 `git` 获取真实提交记录。
+- 可使用更新检查、系统文件保存等桌面能力。
+
+### 构建
+
+```bash
+pnpm build
+pnpm preview
+pnpm tauri:build
+```
+
+## 主要功能
+
+- 项目管理: 添加/删除 Git 仓库路径，支持项目别名。
+- 提交聚合: 按日期范围、作者过滤并合并多个项目提交。
+- AI 周报生成: 流式展示推理和正文，自动入库历史记录。
+- 历史管理: 搜索、按日期过滤、复制纯文本、导出 JSON。
+- 自动更新: 基于 Tauri updater + GitHub Releases。
+
+## 核心数据流
+
+1. 在设置页维护项目列表、API Key、提示词模板。
+2. 仪表盘读取项目并拉取 Git 日志（每个项目独立查询，再合并排序）。
+3. 将日志转换为提示词输入，调用 GLM 流式生成周报。
+4. 周报以 `Report` 结构落地到 Zustand 持久化存储。
+5. 历史页读取持久化数据，支持查看、检索和导出。
+
+## 关键目录
+
+```text
+src/
+  App.tsx                  # 路由入口与整体布局
+  pages/
+    Dashboard.tsx          # Git 拉取、AI 生成、结果预览
+    Settings.tsx           # 项目/API/提示词/更新设置
+    History.tsx            # 周报历史检索与导出
+  lib/
+    git.ts                 # Git 命令调用与解析
+    glm.ts                 # GLM 流式请求与回调
+  store/
+    index.ts               # Zustand 持久化状态
+
 src-tauri/
-  ├── src/
-  │   ├── lib.rs          # 核心逻辑
-  │   └── main.rs         # 入口
-  ├── capabilities/       # 权限配置
-  └── tauri.conf.json     # Tauri 配置
-app/
-  ├── components/         # UI 组件
-  ├── lib/                # 工具函数 (git.ts, utils.ts)
-  ├── store/              # 状态管理
-  └── page.tsx            # 主页面
+  src/lib.rs               # Tauri 插件注册
+  tauri.conf.json          # 窗口、打包、updater 配置
+  capabilities/default.json# 权限声明（git 执行、fs 写入等）
 ```
 
-![alt text](image.png)
-![alt text](image-1.png)
-![alt text](image-2.png)
-![alt text](image-3.png)
+## 更新发布说明
+
+- Updater 配置在 `src-tauri/tauri.conf.json`。
+- 需要签名密钥，可运行:
+
+```bash
+pnpm updater:keys
+```
+
+- 更详细流程见 `docs/UPDATER_GUIDE.md`。
+
+## 截图
+
+![Dashboard](image.png)
+![Dashboard](image-1.png)
+![Settings](image-2.png)
+![History](image-3.png)

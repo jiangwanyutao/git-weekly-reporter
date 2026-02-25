@@ -3,13 +3,14 @@ import { useAppStore } from '@/store';
 import { Report } from '@/types';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Trash2, FileText, Calendar, Copy, Check, Download, GitBranch, GitCommit, Layers } from 'lucide-react';
+import { Trash2, FileText, Calendar, Copy, Check, Download, GitBranch, GitCommit, Layers, Loader2, Send } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/zh-cn';
+import { syncReportToNotion } from '@/lib/notion';
 
 dayjs.extend(relativeTime);
 dayjs.locale('zh-cn');
@@ -23,12 +24,16 @@ import { DatePickerWithRange } from '@/components/ui/date-range-picker';
 import { DateRange } from "react-day-picker";
 import { cn } from "@/lib/utils"
 
+const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
 export default function HistoryPage() {
-  const { reports, deleteReport } = useAppStore();
+  const { reports, deleteReport, settings } = useAppStore();
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
+  const [syncingReportId, setSyncingReportId] = useState<string | null>(null);
+  const exportTitle = isTauri ? "导出当前列表到本地文件" : "导出当前列表（浏览器下载）";
 
   const handleDelete = (id: string) => {
     deleteReport(id);
@@ -79,17 +84,64 @@ export default function HistoryPage() {
     }
     try {
       const suggestedName = `周报导出_${dayjs().format('YYYYMMDD_HHmm')}.json`;
+      const payload = JSON.stringify(filteredReports, null, 2);
+
+      if (!isTauri) {
+        const blob = new Blob([payload], { type: 'application/json;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = suggestedName;
+        anchor.click();
+        URL.revokeObjectURL(url);
+        toast({ title: "导出成功", description: `浏览器已下载 ${filteredReports.length} 份周报` });
+        return;
+      }
+
       const path = await save({
         defaultPath: suggestedName,
         filters: [{ name: 'JSON', extensions: ['json'] }]
       });
       if (path) {
-        await writeTextFile(path, JSON.stringify(filteredReports, null, 2));
-        toast({ title: "导出成功", description: `已导出 ${filteredReports.length} 份周报` });
+        await writeTextFile(path, payload);
+        toast({ title: "导出成功", description: `已保存 ${filteredReports.length} 份周报` });
       }
     } catch (error) {
       console.error('Export failed:', error);
       toast({ title: "导出失败", description: "保存文件时出错", variant: "destructive" });
+    }
+  };
+
+  const handleSyncToNotion = async (report: Report) => {
+    if (syncingReportId) return;
+
+    if (!settings.notionApiKey.trim() || !settings.notionParentPageId.trim()) {
+      toast({
+        title: "Notion 配置不完整",
+        description: "请先在系统配置中填写 Notion Token 和目标页面后保存",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setSyncingReportId(report.id);
+    try {
+      const result = await syncReportToNotion(report, settings);
+      const syncDescription = settings.notionSyncMode === 'subpage'
+        ? '周报已创建为 Notion 子页面'
+        : '周报已追加到 Notion 文档正文';
+      toast({
+        title: "同步成功",
+        description: result.url ? syncDescription : "周报已完成 Notion 同步",
+      });
+    } catch (error: any) {
+      toast({
+        title: "同步失败",
+        description: error.message || "Notion 同步失败",
+        variant: "destructive",
+      });
+    } finally {
+      setSyncingReportId(null);
     }
   };
 
@@ -109,7 +161,7 @@ export default function HistoryPage() {
         const fromDate = dayjs(dateRange.from).startOf('day');
         const toDate = dateRange.to ? dayjs(dateRange.to).endOf('day') : fromDate.endOf('day');
 
-        matchesDate = reportDate.isAfter(fromDate) && reportDate.isBefore(toDate);
+        matchesDate = !reportDate.isBefore(fromDate) && !reportDate.isAfter(toDate);
       }
 
       return matchesSearch && matchesDate;
@@ -129,7 +181,7 @@ export default function HistoryPage() {
             <h1 className="text-xl font-bold">历史周报</h1>
             <div className="flex items-center gap-2">
               <Badge variant="secondary">{filteredReports.length} 份</Badge>
-              <Button variant="outline" size="icon" className="h-6 w-6" onClick={handleExportAll} title="导出当前列表">
+              <Button variant="outline" size="icon" className="h-6 w-6" onClick={handleExportAll} title={exportTitle}>
                 <Download className="h-3.5 w-3.5" />
               </Button>
             </div>
@@ -159,13 +211,21 @@ export default function HistoryPage() {
               </div>
             ) : (
               filteredReports.map((report) => (
-                <button
+                <div
                   key={report.id}
+                  role="button"
+                  tabIndex={0}
                   className={cn(
                     "flex flex-col items-start gap-2 rounded-lg border p-3 text-left text-sm transition-all hover:bg-accent hover:text-accent-foreground group",
                     selectedReport?.id === report.id ? "bg-accent text-accent-foreground" : "bg-card"
                   )}
                   onClick={() => setSelectedId(report.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setSelectedId(report.id);
+                    }
+                  }}
                 >
                   <div className="flex w-full flex-col gap-1">
                     <div className="flex items-center">
@@ -186,24 +246,47 @@ export default function HistoryPage() {
                   <div className={cn("line-clamp-2 text-xs w-full group-hover:text-accent-foreground", selectedReport?.id === report.id ? "text-accent-foreground" : "text-muted-foreground")}>
                     {report.content.substring(0, 100)}...
                   </div>
-                  <div className="flex items-center gap-2 mt-1 flex-wrap">
-                    <Badge variant="outline" className={cn("text-[10px] px-1 py-0 transition-colors group-hover:text-accent-foreground", selectedReport?.id === report.id ? "text-accent-foreground border-accent-foreground/30" : "text-muted-foreground")}>
-                      {report.content.length} 字
-                    </Badge>
-                    {report.totalCommits !== undefined && (
-                      <Badge variant="outline" className={cn("text-[10px] px-1 py-0 gap-1 transition-colors group-hover:text-accent-foreground", selectedReport?.id === report.id ? "text-accent-foreground border-accent-foreground/30" : "text-muted-foreground")}>
-                        <GitCommit className="h-3 w-3" />
-                        {report.totalCommits}
+                  <div className="w-full mt-1 space-y-1.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge variant="outline" className={cn("text-[10px] px-1 py-0 transition-colors group-hover:text-accent-foreground", selectedReport?.id === report.id ? "text-accent-foreground border-accent-foreground/30" : "text-muted-foreground")}>
+                        {report.content.length} 字
                       </Badge>
-                    )}
-                    {report.branches && report.branches.length > 0 && (
-                      <Badge variant="outline" className={cn("text-[10px] px-1 py-0 gap-1 transition-colors group-hover:text-accent-foreground", selectedReport?.id === report.id ? "text-accent-foreground border-accent-foreground/30" : "text-muted-foreground")}>
-                        <GitBranch className="h-3 w-3" />
-                        {report.branches.length > 1 ? `${report.branches.length} 分支` : report.branches[0]}
-                      </Badge>
-                    )}
+                      {report.totalCommits !== undefined && (
+                        <Badge variant="outline" className={cn("text-[10px] px-1 py-0 gap-1 transition-colors group-hover:text-accent-foreground", selectedReport?.id === report.id ? "text-accent-foreground border-accent-foreground/30" : "text-muted-foreground")}>
+                          <GitCommit className="h-3 w-3" />
+                          {report.totalCommits}
+                        </Badge>
+                      )}
+                      {report.branches && report.branches.length > 0 && (
+                        <Badge variant="outline" className={cn("text-[10px] px-1 py-0 gap-1 transition-colors group-hover:text-accent-foreground", selectedReport?.id === report.id ? "text-accent-foreground border-accent-foreground/30" : "text-muted-foreground")}>
+                          <GitBranch className="h-3 w-3" />
+                          {report.branches.length > 1 ? `${report.branches.length} 分支` : report.branches[0]}
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="w-full flex items-center gap-2 flex-wrap justify-start">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        className="h-7 px-2.5 text-xs gap-1 whitespace-nowrap"
+                        title="手动同步到 Notion"
+                        disabled={!!syncingReportId}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void handleSyncToNotion(report);
+                        }}
+                      >
+                        {syncingReportId === report.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Send className="h-3.5 w-3.5" />
+                        )}
+                        <span>同步 Notion</span>
+                      </Button>
+                    </div>
                   </div>
-                </button>
+                </div>
               ))
             )}
           </div>

@@ -10,10 +10,12 @@ import { TitleBar } from '@/components/TitleBar';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import './index.css';
 
+const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
 function App() {
   useEffect(() => {
-    // 前端加载完成后显示窗口
-    getCurrentWindow().show();
+    if (!isTauri) return;
+    void getCurrentWindow().show();
   }, []);
   return (
     <div className="h-screen w-screen flex flex-col overflow-hidden bg-background text-foreground font-sans antialiased">

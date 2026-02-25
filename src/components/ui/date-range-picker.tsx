@@ -4,6 +4,7 @@ import { format } from "date-fns"
 import { zhCN } from "date-fns/locale"
 import { Calendar as CalendarIcon } from "lucide-react"
 import { DateRange } from "react-day-picker"
+import * as React from "react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -25,9 +26,18 @@ export function DatePickerWithRange({
   date,
   setDate,
 }: DatePickerWithRangeProps) {
+  const [open, setOpen] = React.useState(false)
+
+  const handleSelect = (nextDate: DateRange | undefined) => {
+    setDate?.(nextDate)
+    if (nextDate?.from && nextDate?.to) {
+      setOpen(false)
+    }
+  }
+
   return (
     <div className={cn("grid gap-2", className)}>
-      <Popover>
+      <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
             id="date"
@@ -58,8 +68,9 @@ export function DatePickerWithRange({
             mode="range"
             defaultMonth={date?.from}
             selected={date}
-            onSelect={setDate}
+            onSelect={handleSelect}
             numberOfMonths={2}
+            showOutsideDays={false}
             locale={zhCN}
           />
         </PopoverContent>
