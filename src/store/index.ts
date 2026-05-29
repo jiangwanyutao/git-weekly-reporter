@@ -100,6 +100,7 @@ export const useAppStore = create<AppState>()(
         notionProxyUrl: '',
         notionSyncMode: 'append',
         notionContentMode: 'markdown',
+        updaterProxyUrl: '',
       },
       reports: [],
 

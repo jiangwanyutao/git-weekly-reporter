@@ -9,6 +9,7 @@ import { Switch } from '@/components/ui/switch';
 import { useAppStore } from '@/store';
 import { testModelConnection } from '@/lib/glm';
 import { getProjectBranches, getProjectAuthors } from '@/lib/git';
+import { normalizeProxyUrl } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { FolderPlus, Trash2, Save, Pencil, MessageSquare, Folder, Info, RefreshCw, Download, Loader2, PlugZap, SlidersHorizontal, ChevronDown, GitBranch, User, Cpu, Plus, Eye, EyeOff, CheckCircle2, Database } from 'lucide-react';
 import { useState, useEffect } from 'react';
@@ -342,7 +343,8 @@ export default function SettingsPage() {
     }
     setCheckingUpdate(true);
     try {
-      const update = await check();
+      const proxy = normalizeProxyUrl(localSettings.updaterProxyUrl);
+      const update = await check(proxy ? { proxy } : undefined);
       if (update) {
         setUpdateAvailable(update);
         toast({ title: "发现新版本", description: `v${update.version} 可用` });
@@ -351,7 +353,7 @@ export default function SettingsPage() {
       }
     } catch (error: any) {
       console.error(error);
-      toast({ title: "检查更新失败", description: error.message, variant: "destructive" });
+      toast({ title: "检查更新失败", description: error?.message || String(error), variant: "destructive" });
     } finally {
       setCheckingUpdate(false);
     }
@@ -365,7 +367,7 @@ export default function SettingsPage() {
       toast({ title: "更新完成", description: "请重启应用以生效" });
     } catch (error: any) {
       console.error(error);
-      toast({ title: "更新失败", description: error.message, variant: "destructive" });
+      toast({ title: "更新失败", description: error?.message || String(error), variant: "destructive" });
     } finally {
       setUpdating(false);
     }
@@ -822,6 +824,18 @@ export default function SettingsPage() {
                           </Button>
                         )}
                       </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>更新代理地址（可选）</Label>
+                      <Input
+                        value={localSettings.updaterProxyUrl}
+                        onChange={(e) => setLocalSettings((prev) => ({ ...prev, updaterProxyUrl: e.target.value }))}
+                        placeholder="例如 Clash: http://127.0.0.1:7897"
+                      />
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        检查/下载更新通过 GitHub，更新组件<span className="text-foreground">不会自动走系统代理</span>。若直连失败，填写本机代理地址即可（留空则直连）。修改后需点击右上角「保存所有配置」。
+                      </p>
                     </div>
 
                     <div className="space-y-2">

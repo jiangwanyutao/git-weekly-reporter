@@ -71,4 +71,5 @@ export interface AppSettings {
   notionProxyUrl: string;
   notionSyncMode: 'append' | 'subpage';
   notionContentMode: 'markdown' | 'code';
+  updaterProxyUrl: string; // 检查/下载更新时使用的代理（留空=直连，不走系统代理）
 }

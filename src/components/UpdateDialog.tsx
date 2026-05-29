@@ -1,6 +1,8 @@
 import { useState, useRef } from 'react';
 import { check, Update } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
+import { useAppStore } from '@/store';
+import { normalizeProxyUrl } from '@/lib/utils';
 import {
   Dialog,
   DialogContent,
@@ -41,7 +43,8 @@ export function useUpdateDialog() {
     setState(prev => ({ ...prev, status: 'checking', error: null }));
 
     try {
-      const update = await check();
+      const proxy = normalizeProxyUrl(useAppStore.getState().settings.updaterProxyUrl);
+      const update = await check(proxy ? { proxy } : undefined);
       if (update) {
         setState(prev => ({ ...prev, status: 'available', update }));
       } else {
@@ -54,7 +57,7 @@ export function useUpdateDialog() {
       setState(prev => ({
         ...prev,
         status: 'error',
-        error: error.message || '检查更新失败'
+        error: error?.message || String(error) || '检查更新失败'
       }));
     }
   };
@@ -121,7 +124,7 @@ export function useUpdateDialog() {
       setState(prev => ({
         ...prev,
         status: 'error',
-        error: error.message || '下载更新失败'
+        error: error?.message || String(error) || '下载更新失败'
       }));
     }
   };
