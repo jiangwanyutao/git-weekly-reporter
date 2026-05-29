@@ -10,7 +10,7 @@ import { useAppStore } from '@/store';
 import { testModelConnection } from '@/lib/glm';
 import { getProjectBranches, getProjectAuthors } from '@/lib/git';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { FolderPlus, Trash2, Save, Pencil, Key, MessageSquare, Folder, Info, RefreshCw, Download, Loader2, PlugZap, SlidersHorizontal, ChevronDown, GitBranch, User } from 'lucide-react';
+import { FolderPlus, Trash2, Save, Pencil, MessageSquare, Folder, Info, RefreshCw, Download, Loader2, PlugZap, SlidersHorizontal, ChevronDown, GitBranch, User, Cpu, Plus, Eye, EyeOff, CheckCircle2, Database } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { toast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -18,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { check } from '@tauri-apps/plugin-updater';
 import { getVersion } from '@tauri-apps/api/app';
-import type { AiProvider, BranchMode, AuthorMode, Project } from '@/types';
+import type { BranchMode, AuthorMode, Project, ModelProvider, ProviderProtocol } from '@/types';
 import {
   Dialog,
   DialogContent,
@@ -29,6 +29,142 @@ import {
 } from "@/components/ui/dialog"
 
 const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
+const PROTOCOL_OPTIONS: { value: ProviderProtocol; label: string }[] = [
+  { value: 'openai', label: 'OpenAI 兼容' },
+  { value: 'glm', label: '智谱 GLM' },
+  { value: 'minimax', label: 'MiniMax' },
+];
+
+// 单个模型提供商卡片：内置(glm/minimax)只可改 Key/模型/地址，自定义可改全部并删除
+function ProviderCard({
+  provider,
+  isActive,
+  onSetActive,
+  onUpdate,
+  onRemove,
+}: {
+  provider: ModelProvider;
+  isActive: boolean;
+  onSetActive: () => void;
+  onUpdate: (patch: Partial<ModelProvider>) => void;
+  onRemove: () => void;
+}) {
+  const [showKey, setShowKey] = useState(false);
+
+  return (
+    <div
+      className={`rounded-lg border p-4 space-y-4 transition-colors ${
+        isActive ? 'border-primary ring-1 ring-primary/40 bg-primary/5' : 'bg-card/50 hover:border-foreground/20'
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            {provider.builtin ? (
+              <Label className="text-sm font-medium">{provider.name}</Label>
+            ) : (
+              <Input
+                value={provider.name}
+                onChange={(e) => onUpdate({ name: e.target.value })}
+                className="h-7 w-44 text-sm font-medium"
+                placeholder="提供商名称"
+              />
+            )}
+            {isActive && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 text-primary text-[10px] font-medium px-2 py-0.5">
+                <CheckCircle2 className="h-3 w-3" /> 使用中
+              </span>
+            )}
+            {provider.builtin && (
+              <span className="rounded-full bg-muted text-muted-foreground text-[10px] px-2 py-0.5">内置</span>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          {!isActive && (
+            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={onSetActive}>
+              设为当前
+            </Button>
+          )}
+          {!provider.builtin && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-destructive hover:text-destructive/90"
+              onClick={onRemove}
+              title="删除该提供商"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {!provider.builtin && (
+        <div className="space-y-2">
+          <Label>接口协议</Label>
+          <Select value={provider.protocol} onValueChange={(v: ProviderProtocol) => onUpdate({ protocol: v })}>
+            <SelectTrigger className="h-9">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PROTOCOL_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        <Label>API Key</Label>
+        <div className="relative">
+          <Input
+            type={showKey ? 'text' : 'password'}
+            value={provider.apiKey}
+            onChange={(e) => onUpdate({ apiKey: e.target.value })}
+            className="pr-9"
+            placeholder="请输入 API Key"
+          />
+          <button
+            type="button"
+            onClick={() => setShowKey((s) => !s)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            title={showKey ? '隐藏' : '显示'}
+          >
+            {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </button>
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label>模型名</Label>
+          <Input
+            value={provider.model}
+            onChange={(e) => onUpdate({ model: e.target.value })}
+            placeholder="例如: glm-4.7-flash"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>{provider.builtin ? '接口地址 (Base URL)' : '请求地址 (完整 URL)'}</Label>
+          <Input
+            value={provider.baseUrl}
+            onChange={(e) => onUpdate({ baseUrl: e.target.value })}
+            placeholder={provider.builtin ? 'https://api.example.com/v1' : 'https://api.example.com/v1/chat/completions'}
+            disabled={provider.id === 'glm'}
+          />
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {provider.builtin
+          ? <>将自动拼接 <code>/chat/completions</code> 发起请求。</>
+          : <>直接使用你填写的完整地址发起请求，<span className="text-foreground">不会自动拼接</span>任何路径。</>}
+      </p>
+    </div>
+  );
+}
 
 // 单个项目的抓取范围配置（分支 / 作者），展开时懒加载分支与作者列表
 function ProjectAdvanced({
@@ -161,6 +297,37 @@ export default function SettingsPage() {
   useEffect(() => {
     setLocalSettings(settings);
   }, [settings]);
+
+  // ---- 模型提供商管理（作用于 localSettings，点保存后落库）----
+  const updateProvider = (id: string, patch: Partial<ModelProvider>) =>
+    setLocalSettings((prev) => ({
+      ...prev,
+      providers: prev.providers.map((p) => (p.id === id ? { ...p, ...patch } : p)),
+    }));
+
+  const addProvider = () =>
+    setLocalSettings((prev) => {
+      const id = crypto.randomUUID();
+      return {
+        ...prev,
+        providers: [
+          ...prev.providers,
+          { id, name: '自定义模型', protocol: 'openai', apiKey: '', model: '', baseUrl: '', builtin: false },
+        ],
+        activeProviderId: prev.activeProviderId || id,
+      };
+    });
+
+  const removeProvider = (id: string) =>
+    setLocalSettings((prev) => {
+      const providers = prev.providers.filter((p) => p.id !== id);
+      const activeProviderId =
+        prev.activeProviderId === id ? providers[0]?.id ?? '' : prev.activeProviderId;
+      return { ...prev, providers, activeProviderId };
+    });
+
+  const setActiveProvider = (id: string) =>
+    setLocalSettings((prev) => ({ ...prev, activeProviderId: id }));
 
   useEffect(() => {
     if (isTauri) {
@@ -308,8 +475,15 @@ export default function SettingsPage() {
             value="api"
             className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2 flex items-center gap-2"
           >
-            <Key className="h-4 w-4" />
-            API 配置
+            <Cpu className="h-4 w-4" />
+            模型配置
+          </TabsTrigger>
+          <TabsTrigger
+            value="notion"
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2 flex items-center gap-2"
+          >
+            <Database className="h-4 w-4" />
+            Notion 同步
           </TabsTrigger>
           <TabsTrigger
             value="prompt"
@@ -414,6 +588,27 @@ export default function SettingsPage() {
                     </div>
                   </CardContent>
                 </Card>
+
+                {/* 全局作者筛选（仪表盘默认作者；可被每项目“作者范围”覆盖）*/}
+                <Card className="border-0 shadow-none bg-transparent">
+                  <CardHeader className="px-0 py-2">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <User className="h-5 w-5 text-primary" />
+                      全局作者筛选
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="px-0 py-2 space-y-2">
+                    <Label>Git 作者名称</Label>
+                    <Input
+                      value={localSettings.authorName}
+                      onChange={(e) => setLocalSettings((prev) => ({ ...prev, authorName: e.target.value }))}
+                      placeholder="例如: Zhang San（留空 = 全部作者）"
+                    />
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      作为所有项目的默认作者过滤；可在上方各项目的「抓取设置」中单独覆盖。修改后需点击右上角「保存所有配置」生效。
+                    </p>
+                  </CardContent>
+                </Card>
               </div>
             </ScrollArea>
           </TabsContent>
@@ -421,127 +616,65 @@ export default function SettingsPage() {
           <TabsContent value="api" className="h-full m-0 border-none p-0 data-[state=active]:flex flex-col">
             <ScrollArea className="flex-1">
               <div className="pr-4 pb-4">
-                {/* 2. GLM 模型配置 */}
                 <Card className="border-0 shadow-none bg-transparent">
-                  <CardHeader className="px-0 py-2">
-                    <CardTitle className="text-lg">模型配置</CardTitle>
+                  <CardHeader className="flex flex-row items-center justify-between px-0 py-2">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Cpu className="h-5 w-5 text-primary" />
+                      模型配置
+                    </CardTitle>
+                    <Button onClick={addProvider} variant="outline" size="sm">
+                      <Plus className="mr-2 h-4 w-4" />
+                      添加提供商
+                    </Button>
                   </CardHeader>
                   <CardContent className="space-y-4 px-0 py-2">
-                    <div className="space-y-2">
-                      <Label>当前模型提供商</Label>
-                      <Select
-                        value={localSettings.aiProvider}
-                        onValueChange={(value: AiProvider) =>
-                          setLocalSettings((prev) => ({ ...prev, aiProvider: value }))
-                        }
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Button
+                        variant="outline"
+                        onClick={handleTestConnection}
+                        disabled={testingConnection}
                       >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="glm">智谱 GLM</SelectItem>
-                          <SelectItem value="minimax">MiniMax</SelectItem>
-                        </SelectContent>
-                      </Select>
+                        {testingConnection ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <PlugZap className="mr-2 h-4 w-4" />
+                        )}
+                        测试当前连接
+                      </Button>
                       <p className="text-xs text-muted-foreground">
-                        生成周报时会使用这里选中的提供商；两套配置都会分别保存。
-                      </p>
-                      <div className="flex items-center gap-3 pt-1">
-                        <Button
-                          variant="outline"
-                          onClick={handleTestConnection}
-                          disabled={testingConnection}
-                        >
-                          {testingConnection ? (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          ) : (
-                            <PlugZap className="mr-2 h-4 w-4" />
-                          )}
-                          测试当前连接
-                        </Button>
-                        <p className="text-xs text-muted-foreground">
-                          直接测试当前表单里的提供商、模型和 API Key，不需要先保存。
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="rounded-lg border p-4 space-y-4 bg-card/50">
-                      <div className="space-y-1">
-                        <Label className="text-sm font-medium">智谱 GLM</Label>
-                        <p className="text-xs text-muted-foreground">
-                          默认兼容现有配置，适合继续使用当前 GLM 工作流。
-                        </p>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>GLM API Key</Label>
-                        <Input
-                          type="password"
-                          value={localSettings.glmApiKey}
-                          onChange={(e) => setLocalSettings((prev) => ({ ...prev, glmApiKey: e.target.value }))}
-                          placeholder="请输入智谱 AI 的 API Key"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>GLM 模型名</Label>
-                        <Input
-                          value={localSettings.glmModel}
-                          onChange={(e) => setLocalSettings((prev) => ({ ...prev, glmModel: e.target.value }))}
-                          placeholder="例如: glm-4.7-flash"
-                        />
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        申请地址: <a href="https://bigmodel.cn" target="_blank" className="underline">bigmodel.cn</a>
+                        生成周报使用标记「使用中」的提供商。可添加任意 OpenAI 兼容厂商；测试无需先保存，其余修改需点击右上角「保存所有配置」。
                       </p>
                     </div>
 
-                    <div className="rounded-lg border p-4 space-y-4 bg-card/50">
-                      <div className="space-y-1">
-                        <Label className="text-sm font-medium">MiniMax</Label>
-                        <p className="text-xs text-muted-foreground">
-                          使用 OpenAI 兼容接口，可单独配置 API Key、模型名和 Base URL。
-                        </p>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>MiniMax API Key</Label>
-                        <Input
-                          type="password"
-                          value={localSettings.minimaxApiKey}
-                          onChange={(e) => setLocalSettings((prev) => ({ ...prev, minimaxApiKey: e.target.value }))}
-                          placeholder="请输入 MiniMax API Key"
+                    <div className="space-y-3">
+                      {localSettings.providers.map((p) => (
+                        <ProviderCard
+                          key={p.id}
+                          provider={p}
+                          isActive={p.id === localSettings.activeProviderId}
+                          onSetActive={() => setActiveProvider(p.id)}
+                          onUpdate={(patch) => updateProvider(p.id, patch)}
+                          onRemove={() => removeProvider(p.id)}
                         />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>MiniMax 模型名</Label>
-                        <Input
-                          value={localSettings.minimaxModel}
-                          onChange={(e) => setLocalSettings((prev) => ({ ...prev, minimaxModel: e.target.value }))}
-                          placeholder="例如: MiniMax-M2.7"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>MiniMax Base URL</Label>
-                        <Input
-                          value={localSettings.minimaxBaseUrl}
-                          onChange={(e) => setLocalSettings((prev) => ({ ...prev, minimaxBaseUrl: e.target.value }))}
-                          placeholder="例如: https://api.minimax.io/v1"
-                        />
-                        <p className="text-xs text-muted-foreground leading-relaxed">
-                          默认使用 OpenAI 兼容接口地址；如果你使用其他区域或代理地址，可以在这里覆盖。
-                        </p>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        控制台地址: <a href="https://platform.minimax.io" target="_blank" className="underline">platform.minimax.io</a>
-                      </p>
+                      ))}
                     </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </ScrollArea>
+          </TabsContent>
 
-                    <div className="space-y-2">
-                      <Label>Git 作者名称 (用于筛选)</Label>
-                      <Input
-                        value={localSettings.authorName}
-                        onChange={(e) => setLocalSettings({ ...localSettings, authorName: e.target.value })}
-                        placeholder="例如: Zhang San"
-                      />
-                    </div>
+          <TabsContent value="notion" className="h-full m-0 border-none p-0 data-[state=active]:flex flex-col">
+            <ScrollArea className="flex-1">
+              <div className="pr-4 pb-4">
+                <Card className="border-0 shadow-none bg-transparent">
+                  <CardHeader className="px-0 py-2">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Database className="h-5 w-5 text-primary" />
+                      Notion 同步
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4 px-0 py-2">
                     <div className="rounded-lg border p-4 space-y-4 bg-card/50">
                       <div className="flex items-start justify-between gap-4">
                         <div className="space-y-1">

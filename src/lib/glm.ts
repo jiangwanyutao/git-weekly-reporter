@@ -1,25 +1,20 @@
-import type { AppSettings } from '@/types';
+import type { AppSettings, ModelProvider, ProviderProtocol } from '@/types';
 
 export const abortController = new AbortController();
 
-function getActiveProviderConfig(settings: AppSettings) {
-  if (settings.aiProvider === 'minimax') {
-    return {
-      provider: 'minimax' as const,
-      apiKey: settings.minimaxApiKey,
-      model: settings.minimaxModel || 'MiniMax-M2.7',
-      endpoint: `${(settings.minimaxBaseUrl || 'https://api.minimax.io/v1').replace(/\/+$/, '')}/chat/completions`,
-      displayName: settings.minimaxModel || 'MiniMax-M2.7',
-    };
-  }
+// 从设置中取出当前生效的提供商（找不到则回退到第一个）
+export function getActiveProvider(settings: AppSettings): ModelProvider | undefined {
+  const list = settings.providers || [];
+  return list.find((p) => p.id === settings.activeProviderId) ?? list[0];
+}
 
-  return {
-    provider: 'glm' as const,
-    apiKey: settings.glmApiKey,
-    model: settings.glmModel || 'glm-4.7-flash',
-    endpoint: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
-    displayName: settings.glmModel || 'glm-4.7-flash',
-  };
+// 内置(glm/minimax)按 base 自动拼接 /chat/completions；自定义厂商使用用户填写的完整地址
+function buildEndpoint(provider: ModelProvider): string {
+  const url = (provider.baseUrl || '').trim();
+  if (provider.builtin) {
+    return `${url.replace(/\/+$/, '')}/chat/completions`;
+  }
+  return url;
 }
 
 function appendReasoningDelta(delta: any, current: string) {
@@ -40,54 +35,36 @@ function appendReasoningDelta(delta: any, current: string) {
   return current;
 }
 
-function getProviderDisplayName(provider: 'glm' | 'minimax') {
-  return provider === 'minimax' ? 'MiniMax' : 'GLM';
-}
-
 function buildRequestBody(
-  provider: 'glm' | 'minimax',
+  protocol: ProviderProtocol,
   model: string,
   userPrompt: string,
   stream: boolean
 ) {
-  if (provider === 'minimax') {
-    return {
-      model,
-      messages: [
-        {
-          role: "user",
-          content: userPrompt,
-        },
-      ],
-      reasoning_split: true,
-      stream,
-      temperature: 1.0,
-      max_tokens: stream ? 65536 : 64,
-    };
-  }
-
-  return {
+  const base = {
     model,
-    messages: [
-      {
-        role: "user",
-        content: userPrompt,
-      },
-    ],
-    thinking: {
-      type: "enabled"
-    },
+    messages: [{ role: "user", content: userPrompt }],
     stream,
     temperature: 1.0,
     max_tokens: stream ? 65536 : 64,
   };
+
+  if (protocol === 'minimax') {
+    return { ...base, reasoning_split: true };
+  }
+
+  if (protocol === 'glm') {
+    return { ...base, thinking: { type: "enabled" } };
+  }
+
+  // openai 兼容：标准 body，不附加厂商私有字段
+  return base;
 }
 
 async function buildProviderError(
   response: Response,
-  provider: 'glm' | 'minimax'
+  providerName: string
 ): Promise<Error> {
-  const providerName = getProviderDisplayName(provider);
   let serverMessage = '';
 
   try {
@@ -137,45 +114,40 @@ async function buildProviderError(
 }
 
 export async function testModelConnection(settings: AppSettings): Promise<{
-  provider: 'glm' | 'minimax';
   providerName: string;
   model: string;
 }> {
-  const providerConfig = getActiveProviderConfig(settings);
-  const { apiKey, model, endpoint, provider } = providerConfig;
+  const provider = getActiveProvider(settings);
+  if (!provider) {
+    throw new Error("未配置任何模型提供商，请先在设置页添加");
+  }
+
+  const { name, apiKey, model, protocol } = provider;
 
   if (!apiKey) {
-    throw new Error(`${getProviderDisplayName(provider)} API Key 未填写`);
+    throw new Error(`${name} API Key 未填写`);
   }
 
   if (apiKey === "MOCK") {
-    return {
-      provider,
-      providerName: getProviderDisplayName(provider),
-      model,
-    };
+    return { providerName: name, model };
   }
 
-  const response = await fetch(endpoint, {
+  const response = await fetch(buildEndpoint(provider), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${apiKey}`,
     },
     body: JSON.stringify(
-      buildRequestBody(provider, model, "Reply with exactly OK", false)
+      buildRequestBody(protocol, model, "Reply with exactly OK", false)
     ),
   });
 
   if (!response.ok) {
-    throw await buildProviderError(response, provider);
+    throw await buildProviderError(response, name);
   }
 
-  return {
-    provider,
-    providerName: getProviderDisplayName(provider),
-    model,
-  };
+  return { providerName: name, model };
 }
 
 export async function generateWeeklyReport(
@@ -187,8 +159,12 @@ export async function generateWeeklyReport(
   onReasoning?: (chunk: string) => void,
   signal?: AbortSignal
 ): Promise<string> {
-  const providerConfig = getActiveProviderConfig(settings);
-  const { apiKey, model, endpoint } = providerConfig;
+  const provider = getActiveProvider(settings);
+  if (!provider) {
+    throw new Error("未配置任何模型提供商，请先在设置页添加");
+  }
+  const { apiKey, model, protocol } = provider;
+  const endpoint = buildEndpoint(provider);
 
   if (!apiKey) {
     throw new Error("API Key is missing");
@@ -257,13 +233,13 @@ ${projectContext}
         "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify(
-        buildRequestBody(providerConfig.provider, model, userPrompt, true)
+        buildRequestBody(protocol, model, userPrompt, true)
       ),
       signal: signal
     });
 
     if (!response.ok) {
-      throw await buildProviderError(response, providerConfig.provider);
+      throw await buildProviderError(response, provider.name);
     }
 
     if (!response.body) throw new Error("Response body is empty");

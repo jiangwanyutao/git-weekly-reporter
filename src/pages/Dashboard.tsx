@@ -2,7 +2,7 @@
 import { useEffect, useState, useRef, useMemo } from 'react';
 import { useAppStore } from '@/store';
 import { fetchGitLogs, getProjectContext, getProjectAuthors } from '@/lib/git';
-import { generateWeeklyReport } from '@/lib/glm';
+import { generateWeeklyReport, getActiveProvider } from '@/lib/glm';
 import { syncReportToNotion } from '@/lib/notion';
 import { CommitLog, Report } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -50,9 +50,10 @@ export default function Dashboard() {
   const [authors, setAuthors] = useState<string[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  const activeProviderLabel = settings.aiProvider === 'minimax'
-    ? `MiniMax (${settings.minimaxModel || 'MiniMax-M2.7'})`
-    : `GLM (${settings.glmModel || 'glm-4.7-flash'})`;
+  const activeProvider = getActiveProvider(settings);
+  const activeProviderLabel = activeProvider
+    ? `${activeProvider.name} (${activeProvider.model})`
+    : '未配置模型';
 
   // 默认日期范围：本周一到本周五
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
@@ -173,13 +174,10 @@ export default function Dashboard() {
       toast({ title: "无法生成", description: "请至少勾选一条提交记录", variant: "destructive" });
       return;
     }
-    const activeApiKey = settings.aiProvider === 'minimax' ? settings.minimaxApiKey : settings.glmApiKey;
-    if (!activeApiKey) {
+    if (!activeProvider?.apiKey) {
       toast({
         title: "未配置 API Key",
-        description: settings.aiProvider === 'minimax'
-          ? "请先在设置页配置 MiniMax API Key"
-          : "请先在设置页配置 GLM API Key",
+        description: `请先在设置页为「${activeProvider?.name || '当前模型'}」配置 API Key`,
         variant: "destructive"
       });
       return;
