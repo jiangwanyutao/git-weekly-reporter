@@ -8,15 +8,17 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { useAppStore } from '@/store';
 import { testModelConnection } from '@/lib/glm';
+import { getProjectBranches, getProjectAuthors } from '@/lib/git';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { FolderPlus, Trash2, Save, Pencil, Key, MessageSquare, Folder, Info, RefreshCw, Download, Loader2, PlugZap } from 'lucide-react';
+import { FolderPlus, Trash2, Save, Pencil, Key, MessageSquare, Folder, Info, RefreshCw, Download, Loader2, PlugZap, SlidersHorizontal, ChevronDown, GitBranch, User } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { toast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { check } from '@tauri-apps/plugin-updater';
 import { getVersion } from '@tauri-apps/api/app';
-import type { AiProvider } from '@/types';
+import type { AiProvider, BranchMode, AuthorMode, Project } from '@/types';
 import {
   Dialog,
   DialogContent,
@@ -27,6 +29,120 @@ import {
 } from "@/components/ui/dialog"
 
 const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
+// 单个项目的抓取范围配置（分支 / 作者），展开时懒加载分支与作者列表
+function ProjectAdvanced({
+  project,
+  updateProject,
+}: {
+  project: Project;
+  updateProject: (id: string, data: Partial<Project>) => void;
+}) {
+  const [branches, setBranches] = useState<string[]>([]);
+  const [authors, setAuthors] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  const branchMode: BranchMode = project.branchMode ?? 'all';
+  const authorMode: AuthorMode = project.authorMode ?? 'inherit';
+
+  useEffect(() => {
+    if (loaded) return;
+    setLoaded(true);
+    setLoading(true);
+    Promise.all([getProjectBranches(project.path), getProjectAuthors(project.path)])
+      .then(([b, a]) => {
+        setBranches(b);
+        setAuthors(a);
+      })
+      .catch((e) => console.warn('加载分支/作者失败', e))
+      .finally(() => setLoading(false));
+  }, [loaded, project.path]);
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 pt-1">
+      {/* 分支范围 */}
+      <div className="space-y-2">
+        <Label className="text-xs flex items-center gap-1">
+          <GitBranch className="h-3 w-3" /> 分支范围
+        </Label>
+        <Select
+          value={branchMode}
+          onValueChange={(value: BranchMode) =>
+            updateProject(project.id, {
+              branchMode: value,
+              branch: value === 'specific' ? project.branch || branches[0] || '' : project.branch,
+            })
+          }
+        >
+          <SelectTrigger className="h-8 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">全部分支（推荐，不漏提交）</SelectItem>
+            <SelectItem value="current">仅当前分支</SelectItem>
+            <SelectItem value="specific">指定分支</SelectItem>
+          </SelectContent>
+        </Select>
+        {branchMode === 'specific' && (
+          <Select
+            value={project.branch || ''}
+            onValueChange={(value) => updateProject(project.id, { branch: value })}
+          >
+            <SelectTrigger className="h-8 text-xs">
+              <SelectValue placeholder={loading ? '加载中…' : '选择分支'} />
+            </SelectTrigger>
+            <SelectContent>
+              {branches.map((b) => (
+                <SelectItem key={b} value={b}>{b}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+
+      {/* 作者范围 */}
+      <div className="space-y-2">
+        <Label className="text-xs flex items-center gap-1">
+          <User className="h-3 w-3" /> 作者范围
+        </Label>
+        <Select
+          value={authorMode}
+          onValueChange={(value: AuthorMode) =>
+            updateProject(project.id, {
+              authorMode: value,
+              author: value === 'specific' ? project.author || authors[0] || '' : project.author,
+            })
+          }
+        >
+          <SelectTrigger className="h-8 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="inherit">继承全局作者筛选</SelectItem>
+            <SelectItem value="all">全部作者</SelectItem>
+            <SelectItem value="specific">指定作者</SelectItem>
+          </SelectContent>
+        </Select>
+        {authorMode === 'specific' && (
+          <Select
+            value={project.author || ''}
+            onValueChange={(value) => updateProject(project.id, { author: value })}
+          >
+            <SelectTrigger className="h-8 text-xs">
+              <SelectValue placeholder={loading ? '加载中…' : '选择作者'} />
+            </SelectTrigger>
+            <SelectContent>
+              {authors.map((a) => (
+                <SelectItem key={a} value={a}>{a}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function SettingsPage() {
   const { settings, updateSettings, projects, addProject, removeProject, updateProject } = useAppStore();
@@ -231,36 +347,66 @@ export default function SettingsPage() {
                           暂无项目，请点击右上角添加
                         </div>
                       ) : (
-                        projects.map((project) => (
-                          <div key={project.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-accent hover:text-accent-foreground transition-colors group bg-card/50">
-                            <div>
-                              <div className="font-medium flex items-center gap-2">
-                                {project.alias || project.name}
-                                {project.alias && <span className="text-xs text-muted-foreground font-normal transition-colors group-hover:text-accent-foreground/80">({project.name})</span>}
+                        projects.map((project) => {
+                          const branchLabel =
+                            (project.branchMode ?? 'all') === 'all' ? '全部分支' :
+                            (project.branchMode ?? 'all') === 'current' ? '当前分支' :
+                            (project.branch || '指定分支');
+                          const authorLabel =
+                            (project.authorMode ?? 'inherit') === 'inherit' ? '全局作者' :
+                            (project.authorMode ?? 'inherit') === 'all' ? '全部作者' :
+                            (project.author || '指定作者');
+                          return (
+                          <Collapsible key={project.id} className="border rounded-lg bg-card/50 group">
+                            <div className="flex items-center justify-between p-3 hover:bg-accent hover:text-accent-foreground transition-colors rounded-lg">
+                              <div className="min-w-0">
+                                <div className="font-medium flex items-center gap-2">
+                                  {project.alias || project.name}
+                                  {project.alias && <span className="text-xs text-muted-foreground font-normal transition-colors group-hover:text-accent-foreground/80">({project.name})</span>}
+                                </div>
+                                <div className="text-xs text-muted-foreground group-hover:text-accent-foreground/80 transition-colors truncate">{project.path}</div>
+                                <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground group-hover:text-accent-foreground/80">
+                                  <span className="flex items-center gap-1"><GitBranch className="h-3 w-3" />{branchLabel}</span>
+                                  <span className="flex items-center gap-1"><User className="h-3 w-3" />{authorLabel}</span>
+                                </div>
                               </div>
-                              <div className="text-xs text-muted-foreground group-hover:text-accent-foreground/80 transition-colors">{project.path}</div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <CollapsibleTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="text-muted-foreground hover:text-foreground hover:bg-accent group-hover:text-foreground/80 [&[data-state=open]>svg:last-child]:rotate-180"
+                                    title="抓取设置（分支 / 作者）"
+                                  >
+                                    <SlidersHorizontal className="h-4 w-4" />
+                                    <ChevronDown className="h-3 w-3 ml-0.5 transition-transform" />
+                                  </Button>
+                                </CollapsibleTrigger>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="text-muted-foreground hover:text-foreground hover:bg-accent group-hover:text-foreground/80"
+                                  onClick={() => openAliasDialog(project.id, project.alias || project.name)}
+                                  title="修改别名"
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="text-destructive hover:text-destructive/90 group-hover:bg-destructive/10"
+                                  onClick={() => removeProject(project.id)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="text-muted-foreground hover:text-foreground hover:bg-accent group-hover:text-foreground/80"
-                                onClick={() => openAliasDialog(project.id, project.alias || project.name)}
-                                title="修改别名"
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="text-destructive hover:text-destructive/90 group-hover:bg-destructive/10"
-                                onClick={() => removeProject(project.id)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </div>
-                        ))
+                            <CollapsibleContent className="px-3 pb-3 border-t pt-3">
+                              <ProjectAdvanced project={project} updateProject={updateProject} />
+                            </CollapsibleContent>
+                          </Collapsible>
+                          );
+                        })
                       )}
                     </div>
                   </CardContent>

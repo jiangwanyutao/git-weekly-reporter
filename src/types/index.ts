@@ -1,9 +1,19 @@
+// 分支抓取范围：当前分支 / 全部分支 / 指定分支
+export type BranchMode = 'current' | 'all' | 'specific';
+// 作者过滤范围：继承全局 / 全部作者 / 指定作者
+export type AuthorMode = 'inherit' | 'all' | 'specific';
+
 export interface Project {
   id: string;
   path: string;
   name: string;
   alias?: string;
   lastUpdated: number;
+  // 每项目抓取配置（缺省时按 'all' / 'inherit' 处理，见 git.ts）
+  branchMode?: BranchMode;
+  branch?: string; // branchMode === 'specific' 时生效
+  authorMode?: AuthorMode;
+  author?: string; // authorMode === 'specific' 时生效
 }
 
 export interface CommitLog {

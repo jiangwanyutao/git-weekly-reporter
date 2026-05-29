@@ -83,7 +83,14 @@ export const useAppStore = create<AppState>()(
         set((state) => ({
           projects: [
             ...state.projects,
-            { id: crypto.randomUUID(), path, name, lastUpdated: Date.now() },
+            {
+              id: crypto.randomUUID(),
+              path,
+              name,
+              lastUpdated: Date.now(),
+              branchMode: 'all',
+              authorMode: 'inherit',
+            },
           ],
         }));
       },

@@ -8,27 +8,54 @@
  */
 import { Command } from '@tauri-apps/plugin-shell';
 import dayjs from 'dayjs';
-import { CommitLog } from '@/types';
+import { CommitLog, Project } from '@/types';
 
 const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
-export async function fetchGitLogs(projectPath: string, author: string, since?: string, until?: string, projectNameOverride?: string): Promise<CommitLog[]> {
+// 把 git ref（refs/heads/xxx、refs/remotes/origin/xxx、HEAD）规整成可读的分支名
+function normalizeBranchName(ref: string, fallback: string): string {
+  const cleaned = ref.trim();
+  if (!cleaned || cleaned === 'HEAD') return fallback;
+  return cleaned
+    .replace(/^refs\/heads\//, '')
+    .replace(/^refs\/remotes\//, '')
+    .replace(/^remotes\//, '');
+}
+
+export async function fetchGitLogs(
+  project: Project,
+  globalAuthor: string,
+  since?: string,
+  until?: string
+): Promise<CommitLog[]> {
+  const projectName = project.alias || project.name;
+
   // 如果不在 Tauri 环境下，返回 Mock 数据
   if (!isTauri) {
     console.log('Running in Web mode, returning mock logs.');
     return [
-      { hash: 'a1b2c3d', author: 'DemoUser', date: dayjs().subtract(1, 'hour').format('YYYY-MM-DD HH:mm:ss'), message: 'feat: 完成用户登录功能', project: projectNameOverride || 'git-weekly-reporter', branch: 'main' },
-      { hash: 'e5f6g7h', author: 'DemoUser', date: dayjs().subtract(1, 'day').format('YYYY-MM-DD HH:mm:ss'), message: 'fix: 修复样式兼容性问题', project: projectNameOverride || 'git-weekly-reporter', branch: 'develop' },
-      { hash: 'i8j9k0l', author: 'DemoUser', date: dayjs().subtract(2, 'day').format('YYYY-MM-DD HH:mm:ss'), message: 'docs: 更新 README 文档', project: projectNameOverride || 'git-weekly-reporter', branch: 'feature/docs' },
+      { hash: 'a1b2c3d', author: 'DemoUser', date: dayjs().subtract(1, 'hour').format('YYYY-MM-DD HH:mm:ss'), message: 'feat: 完成用户登录功能', project: projectName, branch: 'main' },
+      { hash: 'e5f6g7h', author: 'DemoUser', date: dayjs().subtract(1, 'day').format('YYYY-MM-DD HH:mm:ss'), message: 'fix: 修复样式兼容性问题', project: projectName, branch: 'develop' },
+      { hash: 'i8j9k0l', author: 'DemoUser', date: dayjs().subtract(2, 'day').format('YYYY-MM-DD HH:mm:ss'), message: 'docs: 更新 README 文档', project: projectName, branch: 'feature/docs' },
     ];
   }
+
+  const projectPath = project.path;
 
   // 默认本周五到上周五
   const end = until || dayjs().day(5).hour(18).format('YYYY-MM-DD HH:mm:ss');
   const start = since || dayjs().day(5).subtract(1, 'week').hour(18).format('YYYY-MM-DD HH:mm:ss');
 
+  // 解析每项目配置（缺省按 'all' / 'inherit'）
+  const branchMode = project.branchMode ?? 'all';
+  const authorMode = project.authorMode ?? 'inherit';
+  const resolvedAuthor =
+    authorMode === 'all' ? '' :
+    authorMode === 'specific' ? (project.author || '') :
+    globalAuthor;
+
   try {
-    // 1. 获取当前分支名
+    // 当前分支名，用于显示兜底
     let currentBranch = 'HEAD';
     try {
         const branchCmd = Command.create('git', ['-C', projectPath, 'rev-parse', '--abbrev-ref', 'HEAD']);
@@ -40,22 +67,27 @@ export async function fetchGitLogs(projectPath: string, author: string, since?: 
         console.warn('Failed to get branch name', e);
     }
 
-    const args = [
-      '-C', projectPath,
-      'log',
+    // 组装 git log 参数。统一带 ref，使 %S（reached-by ref）在各模式下都能还原真实分支
+    const args = ['-C', projectPath, 'log'];
+    if (branchMode === 'all') {
+      args.push('--all');
+    } else if (branchMode === 'specific' && project.branch) {
+      args.push(project.branch);
+    } else {
+      // current：显式传当前分支名（等价 HEAD），让 %S 能取到分支
+      args.push(currentBranch === 'HEAD' ? 'HEAD' : currentBranch);
+    }
+
+    args.push(
       `--since=${start}`,
       `--until=${end}`,
-      '--pretty=format:%h|%an|%ad|%s',
+      '--pretty=format:%h|%an|%ad|%S|%s',
       '--date=format:%Y-%m-%d %H:%M:%S',
       '-n', '1000' // 限制最大获取条数，防止卡死
-    ];
+    );
 
-    if (author) {
-      // --author 必须在 log 命令之后
-      // args 现在的结构是: ['-C', path, 'log', ...others]
-      // 我们直接把它 push 进去，或者在构建数组时就放进去
-      // 这里为了简单，我们重新构建 args
-      args.splice(3, 0, `--author=${author}`);
+    if (resolvedAuthor) {
+      args.push(`--author=${resolvedAuthor}`);
     }
 
     const command = Command.create('git', args);
@@ -66,22 +98,21 @@ export async function fetchGitLogs(projectPath: string, author: string, since?: 
       return [];
     }
 
-    const projectName = projectNameOverride || projectPath.split(/[\\/]/).pop() || 'Unknown';
-
     const logs: CommitLog[] = [];
     for (const line of output.stdout.split('\n')) {
       if (!line.trim()) continue;
-      const match = line.match(/^([^|]*)\|([^|]*)\|([^|]*)\|(.*)$/);
+      // 字段：hash|作者|日期|reached-by-ref|消息（消息可能含 | 故放最后）
+      const match = line.match(/^([^|]*)\|([^|]*)\|([^|]*)\|([^|]*)\|(.*)$/);
       if (!match) continue;
 
-      const [, hash, authorName, date, message] = match;
+      const [, hash, authorName, date, refName, message] = match;
       logs.push({
         hash,
         author: authorName,
         date,
         message,
         project: projectName,
-        branch: currentBranch
+        branch: normalizeBranchName(refName, currentBranch),
       });
     }
 
@@ -89,6 +120,33 @@ export async function fetchGitLogs(projectPath: string, author: string, since?: 
 
   } catch (error) {
     console.error(`Failed to fetch logs for ${projectPath}:`, error);
+    return [];
+  }
+}
+
+// 列出项目的所有分支（本地 + 远程），供分支选择下拉使用
+export async function getProjectBranches(projectPath: string): Promise<string[]> {
+  if (!isTauri) return ['main', 'develop', 'feature/docs'];
+
+  try {
+    const command = Command.create('git', [
+      '-C', projectPath,
+      'for-each-ref',
+      '--format=%(refname:short)',
+      'refs/heads', 'refs/remotes',
+    ]);
+    const output = await command.execute();
+    if (output.code !== 0) return [];
+
+    const branches = output.stdout
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .filter((b) => !b.endsWith('/HEAD')); // 过滤 origin/HEAD 之类的符号引用
+
+    return Array.from(new Set(branches));
+  } catch (e) {
+    console.warn('Failed to list branches', e);
     return [];
   }
 }
@@ -151,7 +209,7 @@ export async function getProjectAuthors(projectPath: string): Promise<string[]> 
   if (!isTauri) return ['DemoUser', 'AnotherUser'];
 
   try {
-    const command = Command.create('git', ['-C', projectPath, 'shortlog', '-s', '-n', 'HEAD']);
+    const command = Command.create('git', ['-C', projectPath, 'shortlog', '-s', '-n', '--all']);
     const output = await command.execute();
 
     if (output.code !== 0) return [];

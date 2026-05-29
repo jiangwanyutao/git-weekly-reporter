@@ -15,6 +15,7 @@ import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-e
 import { Task, TaskTrigger, TaskContent } from '@/components/ai-elements/task';
 import { Tool, ToolHeader, ToolContent, ToolInput, ToolOutput } from '@/components/ai-elements/tool';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import dayjs from 'dayjs';
 import { DatePickerWithRange } from '@/components/ui/date-range-picker';
 import { DateRange } from "react-day-picker";
@@ -39,6 +40,7 @@ type AgentStep = {
 export default function Dashboard() {
   const { projects, settings, addReport, updateSettings, reports } = useAppStore();
   const [logs, setLogs] = useState<CommitLog[]>([]);
+  const [selectedHashes, setSelectedHashes] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [generatedReport, setGeneratedReport] = useState<string>('');
@@ -142,19 +144,15 @@ export default function Dashboard() {
 
       const logsByProject = await Promise.all(
         projects.map((project) =>
-          fetchGitLogs(
-            project.path,
-            settings.authorName,
-            since,
-            until,
-            project.alias || project.name
-          )
+          fetchGitLogs(project, settings.authorName, since, until)
         )
       );
       const allLogs: CommitLog[] = logsByProject.flat();
       // 按时间倒序
       allLogs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       setLogs(allLogs);
+      // 默认全选新抓取到的提交
+      setSelectedHashes(new Set(allLogs.map((l) => l.hash)));
       toast({ title: "刷新成功", description: `共获取到 ${allLogs.length} 条提交记录` });
     } catch (error) {
       console.error(error);
@@ -168,6 +166,10 @@ export default function Dashboard() {
   const handleGenerate = async () => {
     if (logs.length === 0) {
       toast({ title: "无法生成", description: "当前没有 Git 提交记录", variant: "destructive" });
+      return;
+    }
+    if (selectedLogs.length === 0) {
+      toast({ title: "无法生成", description: "请至少勾选一条提交记录", variant: "destructive" });
       return;
     }
     const activeApiKey = settings.aiProvider === 'minimax' ? settings.minimaxApiKey : settings.glmApiKey;
@@ -256,12 +258,12 @@ export default function Dashboard() {
         type: 'task',
         title: 'Commit History Analysis',
         status: 'running',
-        details: `Processing ${logs.length} commits...`,
+        details: `Processing ${selectedLogs.length} commits...`,
         tools: []
       }]);
 
-      // 格式化 commit 记录供 AI 阅读
-      const commitsText = logs.map(log => `[${log.project}] ${log.message} (${log.date})`).join('\n');
+      // 格式化 commit 记录供 AI 阅读（仅勾选的提交）
+      const commitsText = selectedLogs.map(log => `[${log.project}] ${log.message} (${log.date})`).join('\n');
 
       await new Promise(r => setTimeout(r, 600));
 
@@ -272,7 +274,7 @@ export default function Dashboard() {
           id: 'tool-git-log',
           name: 'git_log',
           input: { since: dateRange?.from, until: dateRange?.to },
-          output: { count: logs.length },
+          output: { count: selectedLogs.length },
           state: 'completed'
         }]
       } : s));
@@ -316,9 +318,9 @@ export default function Dashboard() {
         },
         content: reportContent,
         status: 'generated',
-        projects: Object.keys(groupedLogs),
-        branches: Array.from(new Set(logs.map(l => l.branch).filter(Boolean) as string[])),
-        totalCommits: logs.length,
+        projects: Array.from(new Set(selectedLogs.map(l => l.project))),
+        branches: Array.from(new Set(selectedLogs.map(l => l.branch).filter(Boolean) as string[])),
+        totalCommits: selectedLogs.length,
       };
       addReport(newReport);
 
@@ -389,6 +391,34 @@ export default function Dashboard() {
     });
     return groups;
   }, [logs]);
+
+  // 选中的提交（喂给 AI 的最终集合）
+  const selectedLogs = useMemo(
+    () => logs.filter((l) => selectedHashes.has(l.hash)),
+    [logs, selectedHashes]
+  );
+
+  const toggleCommit = (hash: string) => {
+    setSelectedHashes((prev) => {
+      const next = new Set(prev);
+      if (next.has(hash)) next.delete(hash);
+      else next.add(hash);
+      return next;
+    });
+  };
+
+  // 项目级全选/反选：传入该项目的提交列表
+  const toggleProject = (projectLogs: CommitLog[]) => {
+    const allSelected = projectLogs.every((l) => selectedHashes.has(l.hash));
+    setSelectedHashes((prev) => {
+      const next = new Set(prev);
+      projectLogs.forEach((l) => {
+        if (allSelected) next.delete(l.hash);
+        else next.add(l.hash);
+      });
+      return next;
+    });
+  };
 
   // 格式化日期显示 (中文)
   const formatDate = (date: Date | undefined) => {
@@ -528,19 +558,38 @@ export default function Dashboard() {
                         暂无数据，请检查日期范围或刷新
                       </div>
                     ) : (
-                      Object.entries(groupedLogs).map(([project, projectLogs]) => (
+                      Object.entries(groupedLogs).map(([project, projectLogs]) => {
+                        const selectedInProject = projectLogs.filter((l) => selectedHashes.has(l.hash)).length;
+                        const allSelected = selectedInProject === projectLogs.length;
+                        return (
                         <div key={project} className="space-y-2 border rounded-md px-2 bg-card">
                           <div className="sticky top-0 bg-card z-10 py-2 border-b flex items-center justify-between">
-                            <h3 className="font-semibold text-sm flex items-center">
-                              <Badge variant="secondary" className="mr-2">{project}</Badge>
-                              <span className="text-muted-foreground text-xs">({projectLogs.length} commits)</span>
+                            <h3 className="font-semibold text-sm flex items-center gap-2">
+                              <Checkbox
+                                checked={allSelected ? true : selectedInProject === 0 ? false : 'indeterminate'}
+                                onCheckedChange={() => toggleProject(projectLogs)}
+                                aria-label={`全选 ${project}`}
+                              />
+                              <Badge variant="secondary" className="mr-1">{project}</Badge>
+                              <span className="text-muted-foreground text-xs">
+                                ({selectedInProject}/{projectLogs.length} 已选)
+                              </span>
                             </h3>
                           </div>
                           <div className="max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
                             <div className="space-y-1">
                               {projectLogs.map((log) => (
-                                <div key={log.hash} className="text-sm p-2 rounded-md commit-item group">
-                                  <div className="flex justify-between items-start gap-2">
+                                <label
+                                  key={log.hash}
+                                  className="flex text-sm p-2 rounded-md commit-item group gap-2 items-start cursor-pointer"
+                                >
+                                  <Checkbox
+                                    className="mt-0.5 shrink-0"
+                                    checked={selectedHashes.has(log.hash)}
+                                    onCheckedChange={() => toggleCommit(log.hash)}
+                                    aria-label="选择此提交"
+                                  />
+                                  <div className="flex justify-between items-start gap-2 flex-1 min-w-0">
                                     <div className="flex flex-col gap-1 min-w-0">
                                       <span className="font-medium break-all leading-snug">{log.message}</span>
                                       {log.branch && (
@@ -554,12 +603,13 @@ export default function Dashboard() {
                                       {dayjs(log.date).format('MM-DD HH:mm')}
                                     </span>
                                   </div>
-                                </div>
+                                </label>
                               ))}
                             </div>
                           </div>
                         </div>
-                      ))
+                        );
+                      })
                     )}
                   </div>
                 </ScrollArea>
@@ -588,8 +638,8 @@ export default function Dashboard() {
                     <span>{generatedReport ? 'AI 生成结果' : '点击生成按钮开始'}</span>
                     {logs.length > 0 && (
                       <>
-                        <span className="flex items-center gap-1" title="提交总数"><GitCommit className="h-3 w-3" /> {logs.length}</span>
-                        <span className="flex items-center gap-1" title="涉及分支"><GitBranch className="h-3 w-3" /> {Array.from(new Set(logs.map(l => l.branch).filter(Boolean))).length} 分支</span>
+                        <span className="flex items-center gap-1" title="已选 / 提交总数"><GitCommit className="h-3 w-3" /> {selectedLogs.length}/{logs.length}</span>
+                        <span className="flex items-center gap-1" title="已选提交涉及分支"><GitBranch className="h-3 w-3" /> {Array.from(new Set(selectedLogs.map(l => l.branch).filter(Boolean))).length} 分支</span>
                       </>
                     )}
                   </CardDescription>
@@ -600,7 +650,7 @@ export default function Dashboard() {
                     停止
                   </Button>
                 ) : (
-                  <Button size="sm" onClick={handleGenerate} disabled={logs.length === 0} className="glow-button">
+                  <Button size="sm" onClick={handleGenerate} disabled={selectedLogs.length === 0} className="glow-button">
                     <Sparkles className="mr-2 h-4 w-4" />
                     生成周报
                   </Button>
