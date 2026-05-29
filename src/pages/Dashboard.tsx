@@ -47,6 +47,10 @@ export default function Dashboard() {
   const [authors, setAuthors] = useState<string[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
 
+  const activeProviderLabel = settings.aiProvider === 'minimax'
+    ? `MiniMax (${settings.minimaxModel || 'MiniMax-M2.7'})`
+    : `GLM (${settings.glmModel || 'glm-4.7-flash'})`;
+
   // 默认日期范围：本周一到本周五
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: dayjs().startOf('week').add(1, 'day').toDate(), // 周一
@@ -166,8 +170,15 @@ export default function Dashboard() {
       toast({ title: "无法生成", description: "当前没有 Git 提交记录", variant: "destructive" });
       return;
     }
-    if (!settings.glmApiKey) {
-      toast({ title: "未配置 API Key", description: "请先在设置页配置 GLM API Key", variant: "destructive" });
+    const activeApiKey = settings.aiProvider === 'minimax' ? settings.minimaxApiKey : settings.glmApiKey;
+    if (!activeApiKey) {
+      toast({
+        title: "未配置 API Key",
+        description: settings.aiProvider === 'minimax'
+          ? "请先在设置页配置 MiniMax API Key"
+          : "请先在设置页配置 GLM API Key",
+        variant: "destructive"
+      });
       return;
     }
 
@@ -273,12 +284,12 @@ export default function Dashboard() {
         type: 'task',
         title: 'Report Generation',
         status: 'running',
-        details: 'Streaming content from GLM-4.7...',
+        details: `Streaming content from ${activeProviderLabel}...`,
         tools: []
       }]);
 
       const reportContent = await generateWeeklyReport(
-        settings.glmApiKey,
+        settings,
         settings.promptTemplate,
         commitsText,
         projectContext,

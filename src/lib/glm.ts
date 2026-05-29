@@ -1,7 +1,185 @@
+import type { AppSettings } from '@/types';
+
 export const abortController = new AbortController();
 
+function getActiveProviderConfig(settings: AppSettings) {
+  if (settings.aiProvider === 'minimax') {
+    return {
+      provider: 'minimax' as const,
+      apiKey: settings.minimaxApiKey,
+      model: settings.minimaxModel || 'MiniMax-M2.7',
+      endpoint: `${(settings.minimaxBaseUrl || 'https://api.minimax.io/v1').replace(/\/+$/, '')}/chat/completions`,
+      displayName: settings.minimaxModel || 'MiniMax-M2.7',
+    };
+  }
+
+  return {
+    provider: 'glm' as const,
+    apiKey: settings.glmApiKey,
+    model: settings.glmModel || 'glm-4.7-flash',
+    endpoint: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
+    displayName: settings.glmModel || 'glm-4.7-flash',
+  };
+}
+
+function appendReasoningDelta(delta: any, current: string) {
+  if (delta?.reasoning_content) {
+    return current + delta.reasoning_content;
+  }
+
+  if (Array.isArray(delta?.reasoning_details)) {
+    let next = current;
+    for (const detail of delta.reasoning_details) {
+      if (typeof detail?.text === 'string') {
+        next = detail.text.startsWith(next) ? detail.text : next + detail.text;
+      }
+    }
+    return next;
+  }
+
+  return current;
+}
+
+function getProviderDisplayName(provider: 'glm' | 'minimax') {
+  return provider === 'minimax' ? 'MiniMax' : 'GLM';
+}
+
+function buildRequestBody(
+  provider: 'glm' | 'minimax',
+  model: string,
+  userPrompt: string,
+  stream: boolean
+) {
+  if (provider === 'minimax') {
+    return {
+      model,
+      messages: [
+        {
+          role: "user",
+          content: userPrompt,
+        },
+      ],
+      reasoning_split: true,
+      stream,
+      temperature: 1.0,
+      max_tokens: stream ? 65536 : 64,
+    };
+  }
+
+  return {
+    model,
+    messages: [
+      {
+        role: "user",
+        content: userPrompt,
+      },
+    ],
+    thinking: {
+      type: "enabled"
+    },
+    stream,
+    temperature: 1.0,
+    max_tokens: stream ? 65536 : 64,
+  };
+}
+
+async function buildProviderError(
+  response: Response,
+  provider: 'glm' | 'minimax'
+): Promise<Error> {
+  const providerName = getProviderDisplayName(provider);
+  let serverMessage = '';
+
+  try {
+    const errorData = await response.json();
+    serverMessage =
+      errorData?.error?.message ||
+      errorData?.message ||
+      errorData?.msg ||
+      '';
+  } catch {
+    try {
+      serverMessage = (await response.text()).trim();
+    } catch {
+      serverMessage = '';
+    }
+  }
+
+  const normalizedMessage = serverMessage.toLowerCase();
+  const isQuotaIssue =
+    normalizedMessage.includes('余额不足') ||
+    normalizedMessage.includes('resource') ||
+    normalizedMessage.includes('quota') ||
+    normalizedMessage.includes('insufficient') ||
+    normalizedMessage.includes('充值');
+
+  if (response.status === 401 || normalizedMessage.includes('invalid api key')) {
+    return new Error(`${providerName} API Key 无效或已过期，请在设置页更新后重新保存`);
+  }
+
+  if (response.status === 429 && isQuotaIssue) {
+    return new Error(`${providerName} 余额不足或无可用资源，请检查账户配额后重试`);
+  }
+
+  if (response.status === 429) {
+    return new Error(`${providerName} 请求频率过高，请稍后重试`);
+  }
+
+  if (response.status >= 500) {
+    return new Error(`${providerName} 服务暂时不可用，请稍后重试`);
+  }
+
+  if (serverMessage) {
+    return new Error(`${providerName} 请求失败 (${response.status}): ${serverMessage}`);
+  }
+
+  return new Error(`${providerName} 请求失败 (${response.status})`);
+}
+
+export async function testModelConnection(settings: AppSettings): Promise<{
+  provider: 'glm' | 'minimax';
+  providerName: string;
+  model: string;
+}> {
+  const providerConfig = getActiveProviderConfig(settings);
+  const { apiKey, model, endpoint, provider } = providerConfig;
+
+  if (!apiKey) {
+    throw new Error(`${getProviderDisplayName(provider)} API Key 未填写`);
+  }
+
+  if (apiKey === "MOCK") {
+    return {
+      provider,
+      providerName: getProviderDisplayName(provider),
+      model,
+    };
+  }
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(
+      buildRequestBody(provider, model, "Reply with exactly OK", false)
+    ),
+  });
+
+  if (!response.ok) {
+    throw await buildProviderError(response, provider);
+  }
+
+  return {
+    provider,
+    providerName: getProviderDisplayName(provider),
+    model,
+  };
+}
+
 export async function generateWeeklyReport(
-  apiKey: string,
+  settings: AppSettings,
   promptTemplate: string,
   commits: string,
   projectContext: string,
@@ -9,6 +187,9 @@ export async function generateWeeklyReport(
   onReasoning?: (chunk: string) => void,
   signal?: AbortSignal
 ): Promise<string> {
+  const providerConfig = getActiveProviderConfig(settings);
+  const { apiKey, model, endpoint } = providerConfig;
+
   if (!apiKey) {
     throw new Error("API Key is missing");
   }
@@ -31,7 +212,7 @@ export async function generateWeeklyReport(
 
 ## 1. 本周工作重点
 - 完成了 Git Weekly Reporter 的核心功能开发。
-- 集成了 GLM-4.7 模型用于自动生成周报。
+- 集成了 AI 模型用于自动生成周报。
 
 ## 2. 详细工作内容
 - **前端开发**:
@@ -69,33 +250,20 @@ ${projectContext}
 `;
 
   try {
-    const response = await fetch("https://open.bigmodel.cn/api/paas/v4/chat/completions", {
+    const response = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${apiKey}`,
       },
-      body: JSON.stringify({
-        model: "glm-4.7-flash",
-        messages: [
-          {
-            role: "user",
-            content: userPrompt,
-          },
-        ],
-        thinking: {
-          type: "enabled"
-        },
-        stream: true,
-        temperature: 1.0,
-        max_tokens: 65536,
-      }),
+      body: JSON.stringify(
+        buildRequestBody(providerConfig.provider, model, userPrompt, true)
+      ),
       signal: signal
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error?.message || "Failed to generate report");
+      throw await buildProviderError(response, providerConfig.provider);
     }
 
     if (!response.body) throw new Error("Response body is empty");
@@ -122,9 +290,9 @@ ${projectContext}
               const parsed = JSON.parse(data);
               const delta = parsed.choices[0]?.delta;
 
-              // Handle reasoning content
-              if (delta?.reasoning_content) {
-                fullReasoning += delta.reasoning_content;
+              const updatedReasoning = appendReasoningDelta(delta, fullReasoning);
+              if (updatedReasoning !== fullReasoning) {
+                fullReasoning = updatedReasoning;
                 if (onReasoning) onReasoning(fullReasoning);
               }
 

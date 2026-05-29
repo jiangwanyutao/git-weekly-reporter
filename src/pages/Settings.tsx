@@ -7,14 +7,16 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { useAppStore } from '@/store';
+import { testModelConnection } from '@/lib/glm';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { FolderPlus, Trash2, Save, Pencil, Key, MessageSquare, Folder, Info, RefreshCw, Download } from 'lucide-react';
+import { FolderPlus, Trash2, Save, Pencil, Key, MessageSquare, Folder, Info, RefreshCw, Download, Loader2, PlugZap } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { toast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { check } from '@tauri-apps/plugin-updater';
 import { getVersion } from '@tauri-apps/api/app';
+import type { AiProvider } from '@/types';
 import {
   Dialog,
   DialogContent,
@@ -37,6 +39,7 @@ export default function SettingsPage() {
   const [updateAvailable, setUpdateAvailable] = useState<any>(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [updating, setUpdating] = useState(false);
+  const [testingConnection, setTestingConnection] = useState(false);
 
   // 当 zustand 持久化状态恢复后，同步 localSettings
   useEffect(() => {
@@ -91,6 +94,25 @@ export default function SettingsPage() {
       title: "设置已保存",
       description: "您的配置已成功更新。",
     });
+  };
+
+  const handleTestConnection = async () => {
+    setTestingConnection(true);
+    try {
+      const result = await testModelConnection(localSettings);
+      toast({
+        title: "连接测试成功",
+        description: `${result.providerName} ${result.model} 可正常访问`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "连接测试失败",
+        description: error.message || "请检查模型配置后重试",
+        variant: "destructive",
+      });
+    } finally {
+      setTestingConnection(false);
+    }
   };
 
   const handleAddProject = async () => {
@@ -253,21 +275,116 @@ export default function SettingsPage() {
                 {/* 2. GLM 模型配置 */}
                 <Card className="border-0 shadow-none bg-transparent">
                   <CardHeader className="px-0 py-2">
-                    <CardTitle className="text-lg">模型配置 (GLM-4.7)</CardTitle>
+                    <CardTitle className="text-lg">模型配置</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4 px-0 py-2">
                     <div className="space-y-2">
-                      <Label>API Key</Label>
-                      <Input
-                        type="password"
-                        value={localSettings.glmApiKey}
-                        onChange={(e) => setLocalSettings({ ...localSettings, glmApiKey: e.target.value })}
-                        placeholder="请输入智谱 AI 的 API Key"
-                      />
+                      <Label>当前模型提供商</Label>
+                      <Select
+                        value={localSettings.aiProvider}
+                        onValueChange={(value: AiProvider) =>
+                          setLocalSettings((prev) => ({ ...prev, aiProvider: value }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="glm">智谱 GLM</SelectItem>
+                          <SelectItem value="minimax">MiniMax</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        生成周报时会使用这里选中的提供商；两套配置都会分别保存。
+                      </p>
+                      <div className="flex items-center gap-3 pt-1">
+                        <Button
+                          variant="outline"
+                          onClick={handleTestConnection}
+                          disabled={testingConnection}
+                        >
+                          {testingConnection ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <PlugZap className="mr-2 h-4 w-4" />
+                          )}
+                          测试当前连接
+                        </Button>
+                        <p className="text-xs text-muted-foreground">
+                          直接测试当前表单里的提供商、模型和 API Key，不需要先保存。
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border p-4 space-y-4 bg-card/50">
+                      <div className="space-y-1">
+                        <Label className="text-sm font-medium">智谱 GLM</Label>
+                        <p className="text-xs text-muted-foreground">
+                          默认兼容现有配置，适合继续使用当前 GLM 工作流。
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>GLM API Key</Label>
+                        <Input
+                          type="password"
+                          value={localSettings.glmApiKey}
+                          onChange={(e) => setLocalSettings((prev) => ({ ...prev, glmApiKey: e.target.value }))}
+                          placeholder="请输入智谱 AI 的 API Key"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>GLM 模型名</Label>
+                        <Input
+                          value={localSettings.glmModel}
+                          onChange={(e) => setLocalSettings((prev) => ({ ...prev, glmModel: e.target.value }))}
+                          placeholder="例如: glm-4.7-flash"
+                        />
+                      </div>
                       <p className="text-xs text-muted-foreground">
                         申请地址: <a href="https://bigmodel.cn" target="_blank" className="underline">bigmodel.cn</a>
                       </p>
                     </div>
+
+                    <div className="rounded-lg border p-4 space-y-4 bg-card/50">
+                      <div className="space-y-1">
+                        <Label className="text-sm font-medium">MiniMax</Label>
+                        <p className="text-xs text-muted-foreground">
+                          使用 OpenAI 兼容接口，可单独配置 API Key、模型名和 Base URL。
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>MiniMax API Key</Label>
+                        <Input
+                          type="password"
+                          value={localSettings.minimaxApiKey}
+                          onChange={(e) => setLocalSettings((prev) => ({ ...prev, minimaxApiKey: e.target.value }))}
+                          placeholder="请输入 MiniMax API Key"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>MiniMax 模型名</Label>
+                        <Input
+                          value={localSettings.minimaxModel}
+                          onChange={(e) => setLocalSettings((prev) => ({ ...prev, minimaxModel: e.target.value }))}
+                          placeholder="例如: MiniMax-M2.7"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>MiniMax Base URL</Label>
+                        <Input
+                          value={localSettings.minimaxBaseUrl}
+                          onChange={(e) => setLocalSettings((prev) => ({ ...prev, minimaxBaseUrl: e.target.value }))}
+                          placeholder="例如: https://api.minimax.io/v1"
+                        />
+                        <p className="text-xs text-muted-foreground leading-relaxed">
+                          默认使用 OpenAI 兼容接口地址；如果你使用其他区域或代理地址，可以在这里覆盖。
+                        </p>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        控制台地址: <a href="https://platform.minimax.io" target="_blank" className="underline">platform.minimax.io</a>
+                      </p>
+                    </div>
+
                     <div className="space-y-2">
                       <Label>Git 作者名称 (用于筛选)</Label>
                       <Input
