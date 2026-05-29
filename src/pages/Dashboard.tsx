@@ -8,7 +8,7 @@ import { CommitLog, Report } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { toast } from '@/hooks/use-toast';
-import { Loader2, RefreshCw, Sparkles, StopCircle, CheckCircle2, Circle, GitCommit, FileText, Activity, Calendar, GitBranch, GripVertical } from 'lucide-react';
+import { Loader2, RefreshCw, Sparkles, StopCircle, CheckCircle2, Circle, GitCommit, FileText, Activity, Calendar, GitBranch, GripVertical, ChevronDown } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
@@ -16,6 +16,7 @@ import { Task, TaskTrigger, TaskContent } from '@/components/ai-elements/task';
 import { Tool, ToolHeader, ToolContent, ToolInput, ToolOutput } from '@/components/ai-elements/tool';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import dayjs from 'dayjs';
 import { DatePickerWithRange } from '@/components/ui/date-range-picker';
 import { DateRange } from "react-day-picker";
@@ -462,7 +463,7 @@ export default function Dashboard() {
                   updateSettings({ ...settings, authorName: val === 'all' ? '' : val });
                 }}
               >
-                <SelectTrigger className="w-[180px] h-8 text-xs">
+                <SelectTrigger className="w-[200px] max-w-[40vw] h-8 text-xs">
                   <SelectValue placeholder="全部作者" />
                 </SelectTrigger>
                 <SelectContent>
@@ -562,22 +563,27 @@ export default function Dashboard() {
                         const selectedInProject = projectLogs.filter((l) => selectedHashes.has(l.hash)).length;
                         const allSelected = selectedInProject === projectLogs.length;
                         return (
-                        <div key={project} className="space-y-2 border rounded-md px-2 bg-card">
-                          <div className="sticky top-0 bg-card z-10 py-2 border-b flex items-center justify-between">
-                            <h3 className="font-semibold text-sm flex items-center gap-2">
-                              <Checkbox
-                                checked={allSelected ? true : selectedInProject === 0 ? false : 'indeterminate'}
-                                onCheckedChange={() => toggleProject(projectLogs)}
-                                aria-label={`全选 ${project}`}
-                              />
-                              <Badge variant="secondary" className="mr-1">{project}</Badge>
-                              <span className="text-muted-foreground text-xs">
-                                ({selectedInProject}/{projectLogs.length} 已选)
-                              </span>
-                            </h3>
+                        <Collapsible key={project} defaultOpen className="border rounded-md bg-card group/collapsible">
+                          <div className="sticky top-0 bg-card z-10 px-2 py-2 border-b flex items-center justify-between gap-2">
+                            {/* checkbox 独立于折叠触发，避免点击冲突 */}
+                            <Checkbox
+                              className="shrink-0"
+                              checked={allSelected ? true : selectedInProject === 0 ? false : 'indeterminate'}
+                              onCheckedChange={() => toggleProject(projectLogs)}
+                              aria-label={`全选 ${project}`}
+                            />
+                            <CollapsibleTrigger className="flex flex-1 items-center justify-between gap-2 min-w-0 text-left">
+                              <h3 className="font-semibold text-sm flex items-center gap-2 min-w-0">
+                                <Badge variant="secondary" className="shrink-0">{project}</Badge>
+                                <span className="text-muted-foreground text-xs whitespace-nowrap">
+                                  ({selectedInProject}/{projectLogs.length} 已选)
+                                </span>
+                              </h3>
+                              <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-data-[state=closed]/collapsible:-rotate-90" />
+                            </CollapsibleTrigger>
                           </div>
-                          <div className="max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                            <div className="space-y-1">
+                          <CollapsibleContent>
+                            <div className="space-y-1 p-1">
                               {projectLogs.map((log) => (
                                 <label
                                   key={log.hash}
@@ -606,8 +612,8 @@ export default function Dashboard() {
                                 </label>
                               ))}
                             </div>
-                          </div>
-                        </div>
+                          </CollapsibleContent>
+                        </Collapsible>
                         );
                       })
                     )}

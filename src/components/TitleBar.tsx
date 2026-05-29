@@ -78,10 +78,8 @@ export function TitleBar() {
       onMouseDown={handleWindowDrag}
       className={`${TITLEBAR_HEIGHT} flex items-center justify-between bg-background select-none border-b border-border/50`}
     >
-      {/* 左侧标题 */}
-      <div className="flex items-center gap-2 px-4">
-        <span className="font-bold text-base">周报助手</span>
-      </div>
+      {/* 左侧留空作为窗口拖拽区（标题统一由侧边栏展示，避免重复） */}
+      <div className="flex-1" />
 
       {/* 右侧控制按钮 */}
       <div className="flex h-full items-center" onMouseDown={(e) => e.stopPropagation()}>

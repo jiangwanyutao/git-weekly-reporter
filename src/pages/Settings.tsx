@@ -289,7 +289,7 @@ export default function SettingsPage() {
     <div className="h-full flex flex-col p-6 space-y-6 overflow-hidden">
       <div className="flex justify-between items-center shrink-0">
         <h1 className="text-3xl font-bold">系统配置</h1>
-        <Button onClick={handleSave} size="lg">
+        <Button onClick={handleSave} size="lg" title="保存 API 配置、提示词、Notion 等表单设置（项目相关设置已即时生效）">
           <Save className="mr-2 h-4 w-4" />
           保存所有配置
         </Button>
@@ -341,6 +341,9 @@ export default function SettingsPage() {
                     </Button>
                   </CardHeader>
                   <CardContent className="px-0 py-2">
+                    <p className="text-xs text-muted-foreground mb-3">
+                      项目的添加/删除、别名与抓取设置（分支 / 作者）<span className="text-foreground font-medium">修改即时生效</span>，无需点击右上角保存。
+                    </p>
                     <div className="space-y-3">
                       {projects.length === 0 ? (
                         <div className="text-center text-muted-foreground py-8">

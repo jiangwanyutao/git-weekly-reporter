@@ -175,7 +175,7 @@ export default function HistoryPage() {
   return (
     <div className="flex-1 p-4 h-full flex overflow-hidden gap-4">
       {/* 左侧列表面板 */}
-      <div className="w-[320px] shrink-0 flex flex-col border rounded-lg bg-background overflow-hidden">
+      <div className="w-[clamp(260px,26vw,380px)] shrink-0 flex flex-col border rounded-lg bg-background overflow-hidden">
         <div className="p-4 space-y-4 border-b shrink-0">
           <div className="flex items-center justify-between">
             <h1 className="text-xl font-bold">历史周报</h1>
@@ -210,14 +210,19 @@ export default function HistoryPage() {
                 没有找到相关周报
               </div>
             ) : (
-              filteredReports.map((report) => (
+              filteredReports.map((report) => {
+                const isSelected = selectedReport?.id === report.id;
+                // 选中/默认下的次要文本色（含 hover 态）
+                const mutedText = isSelected ? "text-accent-foreground" : "text-muted-foreground";
+                const badgeText = isSelected ? "text-accent-foreground border-accent-foreground/30" : "text-muted-foreground";
+                return (
                 <div
                   key={report.id}
                   role="button"
                   tabIndex={0}
                   className={cn(
                     "flex flex-col items-start gap-2 rounded-lg border p-3 text-left text-sm transition-all hover:bg-accent hover:text-accent-foreground group",
-                    selectedReport?.id === report.id ? "bg-accent text-accent-foreground" : "bg-card"
+                    isSelected ? "bg-accent text-accent-foreground" : "bg-card"
                   )}
                   onClick={() => setSelectedId(report.id)}
                   onKeyDown={(e) => {
@@ -235,30 +240,30 @@ export default function HistoryPage() {
                         </div>
                         {!report.status && <span className="flex h-2 w-2 rounded-full bg-blue-600" />}
                       </div>
-                      <div className={cn("ml-auto text-xs group-hover:text-accent-foreground", selectedReport?.id === report.id ? "text-accent-foreground" : "text-muted-foreground")}>
+                      <div className={cn("ml-auto text-xs group-hover:text-accent-foreground", mutedText)}>
                         {dayjs(report.createdAt).fromNow()}
                       </div>
                     </div>
-                    <div className={cn("text-xs font-medium group-hover:text-accent-foreground", selectedReport?.id === report.id ? "text-accent-foreground" : "text-muted-foreground")}>
+                    <div className={cn("text-xs font-medium group-hover:text-accent-foreground", mutedText)}>
                       范围: {dayjs(report.dateRange.start).format('MM/DD')} - {dayjs(report.dateRange.end).format('MM/DD')}
                     </div>
                   </div>
-                  <div className={cn("line-clamp-2 text-xs w-full group-hover:text-accent-foreground", selectedReport?.id === report.id ? "text-accent-foreground" : "text-muted-foreground")}>
+                  <div className={cn("line-clamp-2 text-xs w-full group-hover:text-accent-foreground", mutedText)}>
                     {report.content.substring(0, 100)}...
                   </div>
                   <div className="w-full mt-1 space-y-1.5">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <Badge variant="outline" className={cn("text-[10px] px-1 py-0 transition-colors group-hover:text-accent-foreground", selectedReport?.id === report.id ? "text-accent-foreground border-accent-foreground/30" : "text-muted-foreground")}>
+                      <Badge variant="outline" className={cn("text-[10px] px-1 py-0 transition-colors group-hover:text-accent-foreground", badgeText)}>
                         {report.content.length} 字
                       </Badge>
                       {report.totalCommits !== undefined && (
-                        <Badge variant="outline" className={cn("text-[10px] px-1 py-0 gap-1 transition-colors group-hover:text-accent-foreground", selectedReport?.id === report.id ? "text-accent-foreground border-accent-foreground/30" : "text-muted-foreground")}>
+                        <Badge variant="outline" className={cn("text-[10px] px-1 py-0 gap-1 transition-colors group-hover:text-accent-foreground", badgeText)}>
                           <GitCommit className="h-3 w-3" />
                           {report.totalCommits}
                         </Badge>
                       )}
                       {report.branches && report.branches.length > 0 && (
-                        <Badge variant="outline" className={cn("text-[10px] px-1 py-0 gap-1 transition-colors group-hover:text-accent-foreground", selectedReport?.id === report.id ? "text-accent-foreground border-accent-foreground/30" : "text-muted-foreground")}>
+                        <Badge variant="outline" className={cn("text-[10px] px-1 py-0 gap-1 transition-colors group-hover:text-accent-foreground", badgeText)}>
                           <GitBranch className="h-3 w-3" />
                           {report.branches.length > 1 ? `${report.branches.length} 分支` : report.branches[0]}
                         </Badge>
@@ -287,7 +292,8 @@ export default function HistoryPage() {
                     </div>
                   </div>
                 </div>
-              ))
+                );
+              })
             )}
           </div>
         </ScrollArea>
