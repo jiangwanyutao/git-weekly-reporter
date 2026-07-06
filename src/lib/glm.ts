@@ -220,8 +220,8 @@ export async function generateWeeklyReport(
 
   const userPrompt = `${promptTemplate.replace("{{commits}}", commits)}
 
-# Project Context Information
-The following is an automated analysis of the project files (README, package.json, etc.) to help you understand the context of the work:
+# 项目背景信息（仅供你理解项目用途，不要把这些背景本身写进周报）
+以下是各相关项目的自动分析结果（来自 README、package.json 等）。每段以「## 项目 [项目名]」开头，其中的项目名与上方提交记录中每条前的 [项目名] 前缀一一对应，请据此把提交准确归类到对应项目，并在周报中沿用该项目名：
 ${projectContext}
 `;
 

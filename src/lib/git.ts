@@ -151,10 +151,14 @@ export async function getProjectBranches(projectPath: string): Promise<string[]>
   }
 }
 
-export async function getProjectContext(projectPath: string): Promise<string> {
-  if (!isTauri) return `Project: ${projectPath}\nMock Context: React + TypeScript Project\n---\n`;
+export async function getProjectContext(project: Project): Promise<string> {
+  const projectPath = project.path;
+  // 与 commit 前缀 [项目名] 使用同一显示名（别名优先），确保 AI 能把背景关联到对应提交
+  const displayName = project.alias || project.name;
 
-  let context = `Project: ${projectPath.split(/[\\/]/).pop()}\n`;
+  if (!isTauri) return `## 项目 [${displayName}]\n路径: ${projectPath}\n类型: React + TypeScript Project (Mock)\n---\n`;
+
+  let context = `## 项目 [${displayName}]\n路径: ${projectPath}\n`;
 
   try {
     // 1. Try to read package.json

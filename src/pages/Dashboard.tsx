@@ -230,13 +230,16 @@ export default function Dashboard() {
       // 获取项目上下文 (Agent 能力)
       let projectContext = "";
       try {
-        const contexts = await Promise.all(projects.map(p => getProjectContext(p.path)));
+        // 仅为「本次勾选的提交实际涉及的项目」生成背景，避免未选中项目的背景成为噪音
+        const activeProjectNames = new Set(selectedLogs.map(l => l.project));
+        const activeProjects = projects.filter(p => activeProjectNames.has(p.alias || p.name));
+        const contexts = await Promise.all(activeProjects.map(p => getProjectContext(p)));
         projectContext = contexts.join('\n');
 
         setAgentSteps(prev => prev.map(s => s.id === analysisStepId ? {
           ...s,
           status: 'completed',
-          details: `Analyzed ${projects.length} projects.`,
+          details: `Analyzed ${activeProjects.length} projects.`,
           tools: [{
             id: 'tool-read-pkg',
             name: 'read_file',
