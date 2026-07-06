@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { useAppStore } from '@/store';
+import { useAppStore, DEFAULT_PROMPT } from '@/store';
 import { testModelConnection } from '@/lib/glm';
 import { getProjectBranches, getProjectAuthors } from '@/lib/git';
 import { normalizeProxyUrl } from '@/lib/utils';
@@ -778,8 +778,19 @@ export default function SettingsPage() {
               <div className="pr-4 pb-4">
                 {/* 3. 提示词配置 */}
                 <Card className="border-0 shadow-none bg-transparent">
-                  <CardHeader className="px-0 py-2">
+                  <CardHeader className="px-0 py-2 flex-row items-center justify-between space-y-0">
                     <CardTitle className="text-lg">提示词模板</CardTitle>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setLocalSettings({ ...localSettings, promptTemplate: DEFAULT_PROMPT });
+                        toast({ title: '已恢复默认提示词', description: '记得点击“保存”后生效' });
+                      }}
+                    >
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      恢复默认
+                    </Button>
                   </CardHeader>
                   <CardContent className="px-0 py-2">
                     <div className="space-y-2">
@@ -789,7 +800,7 @@ export default function SettingsPage() {
                         onChange={(e) => setLocalSettings({ ...localSettings, promptTemplate: e.target.value })}
                       />
                       <p className="text-xs text-muted-foreground">
-                        可用变量: <code>{`{{commits}}`}</code> - 将被替换为具体的 Git 提交记录
+                        可用变量: <code>{`{{commits}}`}</code> - 将被替换为具体的 Git 提交记录。若周报仍偏“流水账”，可点右上角“恢复默认”应用新版提示词。
                       </p>
                     </div>
                   </CardContent>
