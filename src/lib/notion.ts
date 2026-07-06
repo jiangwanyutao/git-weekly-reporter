@@ -3,7 +3,8 @@ import { invoke } from '@tauri-apps/api/core';
 import { AppSettings, Report } from '@/types';
 
 const RICH_TEXT_LIMIT = 1800;
-const MAX_CHILDREN_BLOCKS = 100;
+// Notion 单次请求最多 100 个 children，这里不再前端截断内容，
+// 而是生成完整块后交由 Rust 端（create_notion_page）按每 100 个分批发送。
 const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 const DEFAULT_NOTION_SYNC_MODE = 'append' as const;
 
@@ -87,8 +88,6 @@ type NotionCodeLanguage =
   | 'yaml'
   | 'java/c/c++/c#';
 
-const TRUNCATED_TEXT = '内容较长，已截断。完整文本请以本地历史记录为准。';
-
 function createRichText(content: string) {
   const source = content || ' ';
   return splitByLength(source, RICH_TEXT_LIMIT).map((chunk) => ({
@@ -108,26 +107,6 @@ function stripInlineMarkdown(text: string): string {
     .replace(/\*([^*]+)\*/g, '$1')
     .replace(/_([^_]+)_/g, '$1')
     .trim();
-}
-
-function appendBlock(
-  blocks: Array<Record<string, unknown>>,
-  block: Record<string, unknown>
-): boolean {
-  if (blocks.length >= MAX_CHILDREN_BLOCKS) return false;
-  blocks.push(block);
-  return true;
-}
-
-function finalizeBlocks(blocks: Array<Record<string, unknown>>, truncated: boolean) {
-  if (truncated && blocks.length > 0) {
-    blocks[blocks.length - 1] = {
-      object: 'block',
-      type: 'paragraph',
-      paragraph: { rich_text: createRichText(TRUNCATED_TEXT) },
-    };
-  }
-  return blocks;
 }
 
 function mapCodeLanguage(langRaw: string): NotionCodeLanguage {
@@ -185,25 +164,18 @@ function buildCodeBlocks(raw: string, language: NotionCodeLanguage) {
 function parseMarkdownToBlocks(markdown: string): Array<Record<string, unknown>> {
   const lines = markdown.replace(/\r\n/g, '\n').split('\n');
   const blocks: Array<Record<string, unknown>> = [];
-  let truncated = false;
 
   let paragraphLines: string[] = [];
   let inCodeBlock = false;
   let codeLanguage: NotionCodeLanguage = 'plain text';
   let codeLines: string[] = [];
 
-  const safePush = (block: Record<string, unknown>) => {
-    const ok = appendBlock(blocks, block);
-    if (!ok) truncated = true;
-    return ok;
-  };
-
   const flushParagraph = () => {
-    if (paragraphLines.length === 0) return true;
+    if (paragraphLines.length === 0) return;
     const text = stripInlineMarkdown(paragraphLines.join('\n'));
     paragraphLines = [];
-    if (!text) return true;
-    return safePush({
+    if (!text) return;
+    blocks.push({
       object: 'block',
       type: 'paragraph',
       paragraph: { rich_text: createRichText(text) },
@@ -213,21 +185,18 @@ function parseMarkdownToBlocks(markdown: string): Array<Record<string, unknown>>
   const flushCode = () => {
     const text = codeLines.join('\n');
     codeLines = [];
-    const codeBlocks = buildCodeBlocks(text, codeLanguage);
-    for (const block of codeBlocks) {
-      if (!safePush(block)) return false;
+    for (const block of buildCodeBlocks(text, codeLanguage)) {
+      blocks.push(block);
     }
-    return true;
   };
 
   for (const rawLine of lines) {
-    if (truncated) break;
     const line = rawLine ?? '';
 
     if (inCodeBlock) {
       const codeEnd = line.trimStart().startsWith('```');
       if (codeEnd) {
-        if (!flushCode()) break;
+        flushCode();
         inCodeBlock = false;
       } else {
         codeLines.push(line);
@@ -237,7 +206,7 @@ function parseMarkdownToBlocks(markdown: string): Array<Record<string, unknown>>
 
     const codeStart = line.match(/^\s*```([\w#+.-]*)\s*$/);
     if (codeStart) {
-      if (!flushParagraph()) break;
+      flushParagraph();
       inCodeBlock = true;
       codeLanguage = mapCodeLanguage(codeStart[1] || 'plain text');
       codeLines = [];
@@ -245,75 +214,73 @@ function parseMarkdownToBlocks(markdown: string): Array<Record<string, unknown>>
     }
 
     if (!line.trim()) {
-      if (!flushParagraph()) break;
+      flushParagraph();
       continue;
     }
 
     const headingMatch = line.match(/^(#{1,6})\s+(.*)$/);
     if (headingMatch) {
-      if (!flushParagraph()) break;
+      flushParagraph();
       const level = headingMatch[1].length;
       const text = stripInlineMarkdown(headingMatch[2]).slice(0, 200);
       const type = level === 1 ? 'heading_1' : level === 2 ? 'heading_2' : 'heading_3';
-      if (!safePush({
+      blocks.push({
         object: 'block',
         type,
         [type]: { rich_text: createRichText(text) },
-      })) break;
+      });
       continue;
     }
 
     if (/^\s*([-*_])\1{2,}\s*$/.test(line)) {
-      if (!flushParagraph()) break;
-      if (!safePush({ object: 'block', type: 'divider', divider: {} })) break;
+      flushParagraph();
+      blocks.push({ object: 'block', type: 'divider', divider: {} });
       continue;
     }
 
     const quoteMatch = line.match(/^\s*>\s?(.*)$/);
     if (quoteMatch) {
-      if (!flushParagraph()) break;
+      flushParagraph();
       const text = stripInlineMarkdown(quoteMatch[1]);
-      if (!safePush({
+      blocks.push({
         object: 'block',
         type: 'quote',
         quote: { rich_text: createRichText(text || ' ') },
-      })) break;
+      });
       continue;
     }
 
     const bulletMatch = line.match(/^\s*[-*+]\s+(.*)$/);
     if (bulletMatch) {
-      if (!flushParagraph()) break;
+      flushParagraph();
       const text = stripInlineMarkdown(bulletMatch[1]);
-      if (!safePush({
+      blocks.push({
         object: 'block',
         type: 'bulleted_list_item',
         bulleted_list_item: { rich_text: createRichText(text || ' ') },
-      })) break;
+      });
       continue;
     }
 
     const numberMatch = line.match(/^\s*\d+\.\s+(.*)$/);
     if (numberMatch) {
-      if (!flushParagraph()) break;
+      flushParagraph();
       const text = stripInlineMarkdown(numberMatch[1]);
-      if (!safePush({
+      blocks.push({
         object: 'block',
         type: 'numbered_list_item',
         numbered_list_item: { rich_text: createRichText(text || ' ') },
-      })) break;
+      });
       continue;
     }
 
     paragraphLines.push(line);
   }
 
-  if (!truncated) {
-    if (inCodeBlock) {
-      if (!flushCode()) truncated = true;
-    }
-    if (!flushParagraph()) truncated = true;
+  if (inCodeBlock) {
+    flushCode();
   }
+  flushParagraph();
 
   if (blocks.length === 0) {
     blocks.push({
@@ -323,7 +290,7 @@ function parseMarkdownToBlocks(markdown: string): Array<Record<string, unknown>>
     });
   }
 
-  return finalizeBlocks(blocks, truncated);
+  return blocks;
 }
 
 function normalizeNotionPageId(raw: string): string {
