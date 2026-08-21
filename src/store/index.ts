@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { Project, Report, AppSettings, ModelProvider } from '@/types';
+import { LEGACY_DEFAULT_PROMPTS } from './legacy-prompts';
 
 // 内置提供商的固定 id
 export const BUILTIN_GLM_ID = 'glm';
@@ -16,9 +17,20 @@ function defaultProviders(): ModelProvider[] {
   ];
 }
 
+// 用户存的还是某一版内置默认提示词 = 从没自己改过，升级为最新默认。
+// 不做这一步，持久化会把旧提示词永久固定住，改 DEFAULT_PROMPT 对老用户完全无效。
+function upgradeDefaultPrompt(raw: any): any {
+  // 统一换行符再比对，避免跨平台的 CRLF/LF 差异造成漏判
+  const normalize = (s: string) => s.replace(/\r\n/g, '\n').trim();
+  const current = typeof raw?.promptTemplate === 'string' ? normalize(raw.promptTemplate) : '';
+  if (!current || !LEGACY_DEFAULT_PROMPTS.some((p) => normalize(p) === current)) return raw;
+  return { ...raw, promptTemplate: DEFAULT_PROMPT };
+}
+
 // 把旧版扁平字段(aiProvider/glm*/minimax*)迁移成 providers 列表
-function migrateSettings(raw: any): Partial<AppSettings> {
-  if (!raw || typeof raw !== 'object') return {};
+function migrateSettings(input: any): Partial<AppSettings> {
+  if (!input || typeof input !== 'object') return {};
+  const raw = upgradeDefaultPrompt(input);
   if (Array.isArray(raw.providers) && raw.providers.length > 0) return raw; // 已是新结构
 
   const providers = defaultProviders();
@@ -53,31 +65,63 @@ interface AppState {
   deleteReport: (id: string) => void;
 }
 
-export const DEFAULT_PROMPT = `你是一位资深的技术负责人，擅长从琐碎的开发记录中提炼出真正有价值的工作成果。请根据我提供的 Git 提交记录，生成一份面向团队与上级、重点突出、易于阅读的周报。
+export const DEFAULT_PROMPT = `你是一位资深的技术负责人，要把一周琐碎的开发记录写成一份**给团队和上级看**的周报。请始终记住：读者不写代码，也不知道任何内部代号。
 
-**核心原则（务必严格遵守）：**
-1. **归纳提炼，拒绝流水账**：绝对不要逐条翻译或罗列每一条 commit。请把围绕同一功能/目标的多条提交（多次开发、修复、优化）**合并归纳成一件完整的工作成果**，用一句话讲清楚“做了什么、达成了什么价值”，而不是“改动了哪些代码”。
-2. **聚焦成果与价值**：从使用者或业务视角描述工作意义（解决了什么问题、带来了什么改进、完成了什么能力），而非机械复述技术细节或提交信息原文。
-3. **过滤噪音**：忽略无实质意义的提交，例如版本号变更（bump version）、合并提交（merge）、代码格式调整、拼写修正、临时提交（wip）等，不要写进周报。
-4. **控制篇幅、突出重点**：每个项目只保留 3~6 条最重要的工作，按重要性排序；零散的小改动请合并到“其他优化与修复”一条里概括，不要展开。
-5. **按项目分类**：提交记录中可能包含多个项目（以 \`[项目名]\` 标识）。请按项目分开叙述，不要把不同项目的内容混在一起。
+**输入说明：**
+下面的提交记录已经按「项目 → 模块」预先归好组。同一模块下的多条记录属于同一件事的多次提交，必须**合并成一条**来写，绝不能拆开逐条罗列。
 
-**周报格式模板：**
----
+**五条硬性要求：**
+
+**1. 说人话，不许出现技术黑话**
+周报正文里禁止出现下列内容，一个都不行：
+- 需求单号、工单号、任务编号（形如 AG-77、BD-01a、MG-05）
+- 数据库表名、字段名、类名、方法名、常量名（形如 emr_qc_level_config、finish_reason、WORKFLOW_MAX_STEPS）
+- 文件名、目录路径、分支名（形如 DESIGN.md、deploy/xxx.sh、feature/login）
+- 框架、库、样式类等实现细节（形如 min-w-0、z-index、CodeMirror、Teleport）
+
+如果一条改动离开这些名词就说不清楚，就改用它对**使用者**的意义来描述。
+示例：「修复 emr_qc_level_config 未生效导致 vetoHit 误判」
+应写成：「修复病历质控等级判定错误，避免合格病历被误判为不合格」
+
+**2. 用阿拉伯数字编号，每个项目内从 1 重新开始**
+条目使用 \`1.\` \`2.\` \`3.\` \`4.\`，不要用 \`-\` 或 \`*\`。项目 A 编到第 3 条，项目 B 仍然从 \`1.\` 重新开始。
+
+**3. 条目数量已经算好了，照着写，不要自行压缩**
+下方每个项目标题后面写明了「本项目合计请写 X~Y 条」，每个模块后面写明了「本模块请写成 M~N 条」。**这些数字是硬要求，必须达到，不允许因为想精简而少写。**
+- 一个模块要写成好几条时，就按它内部的不同工作方向拆开分别成条，不要硬塞进一句话里。
+- 标着「并入『其他优化与修复』」的模块，才合并到最后一条里。
+- 围绕同一目标的多次提交合并成一条，讲清楚「做成了什么、带来了什么价值」，而不是「改了哪些代码」。
+- **新增能力、打通链路、修复影响用户的缺陷属于功能成果，必须单独成条，不许降格塞进界面细节类的条目里。**
+
+**4. 只写有价值的成果**
+忽略版本号变更、合并提交、格式调整、临时提交这类没有信息量的记录。
+若某组标注了「另有 N 条同类改动未逐条列出」，说明这块工作量更大，请在描述里体现其分量，但依然只写一条。
+
+**5. 输出前必须自检一遍**
+通读你写好的草稿，凡是出现下列形态的内容，一律改写成人话后再输出：
+- 带等号或括号的代码写法（如 fit=False、count(*)、body=None）
+- 带单位的数值参数（如 160px、8rem、512token）
+- 驼峰或下划线拼写的英文标识符、全大写常量
+- 任何只有本项目开发者才看得懂的英文缩写
+确认一个都没有了，再给出最终结果。
+
+**输出格式（严格遵守）：**
+
+每条由「加粗短标题 + 冒号 + 具体说明」组成。**短标题必须是你根据这条的实际内容自己拟的**，比如「多轮对话打通」「训练配置一键导入」。绝对不要把下面示例里的字面文字抄进去。
+
 **详细工作内容：**
 
 **【项目A名称】**
-*   **核心工作一：** 一句话概括完成的成果及其价值（可由多条相关提交归纳而来）。
-*   **核心工作二：** 一句话概括完成的成果及其价值。
-*   **其他优化与修复：** 概括性描述本项目其余的 Bug 修复、重构与零散优化，无需逐条展开。
+1. **多轮对话打通：** 修复了会话上下文在对外接口中丢失的问题，用户追问时系统能正确接住上一轮内容。
+2. **训练配置一键导入：** 支持粘贴现成的配置文件自动填表，创建训练任务不再需要手工逐项录入。
+3. **其他优化与修复：** 概括本项目其余零散改动，一句话带过。
 
 **【项目B名称】**
-*   **核心工作一：** ……
+1. **评测标准细化：** ……
 
-*(如有更多项目，请按相同格式添加；若某项目本周提交很少，可精简为 1~2 条)*
----
+**下方列出了几个项目，就必须写几段，一个都不能漏。** 即使某个项目提交较少，也要按它标注的条目数写完。
 
-**请根据以下 Git 提交记录生成周报（牢记：归纳成果，而非罗列提交）：**
+**以下是本周的提交记录（已按项目 / 模块归组，请在此基础上提炼）：**
 {{commits}}`;
 
 export const useAppStore = create<AppState>()(

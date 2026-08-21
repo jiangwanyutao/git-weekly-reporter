@@ -3,6 +3,7 @@ import { useEffect, useState, useRef, useMemo } from 'react';
 import { useAppStore } from '@/store';
 import { fetchGitLogs, getProjectContext, getProjectAuthors } from '@/lib/git';
 import { generateWeeklyReport, getActiveProvider } from '@/lib/glm';
+import { aggregateCommits, formatForPrompt, sanitizeReport, withReportHeader } from '@/lib/commits';
 import { syncReportToNotion } from '@/lib/notion';
 import { CommitLog, Report } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -22,6 +23,12 @@ import { DatePickerWithRange } from '@/components/ui/date-range-picker';
 import { DateRange } from "react-day-picker";
 import ReactMarkdown from 'react-markdown';
 
+
+// 取所在自然周的周一。用原生 day()（0=周日）自己算，不走 startOf('week')——
+// 后者的周起点跟随 dayjs locale，zh-cn 下是周一，会让整个范围整体后移一天。
+function mondayOf(d: dayjs.Dayjs) {
+  return d.subtract((d.day() + 6) % 7, 'day').startOf('day');
+}
 
 type AgentStep = {
   id: string;
@@ -57,8 +64,8 @@ export default function Dashboard() {
 
   // 默认日期范围：本周一到本周五
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: dayjs().startOf('week').add(1, 'day').toDate(), // 周一
-    to: dayjs().endOf('week').subtract(1, 'day').toDate(), // 周五
+    from: mondayOf(dayjs()).toDate(),
+    to: mondayOf(dayjs()).add(4, 'day').endOf('day').toDate(),
   });
 
   // 拖拽分隔条相关状态
@@ -192,107 +199,101 @@ export default function Dashboard() {
     abortControllerRef.current = new AbortController();
 
     try {
-      // Step 1: Intent Recognition
-      setAgentSteps(prev => [...prev, {
-        id: 'intent',
-        type: 'task',
-        title: 'Intent Recognition',
-        status: 'completed',
-        details: 'User Request: Generate Weekly Report',
-        tools: []
-      }]);
+      // 步骤 1：读取项目背景（真实读取 README / package.json）
+      const contextStepId = 'context';
+      const activeProjectNames = new Set(selectedLogs.map(l => l.project));
+      const activeProjects = projects.filter(p => activeProjectNames.has(p.alias || p.name));
 
-      // Step 2: Project Analysis
-      const analysisStepId = 'analysis';
       setAgentSteps(prev => [...prev, {
-        id: analysisStepId,
+        id: contextStepId,
         type: 'task',
-        title: 'Project Analysis',
+        title: '读取项目背景',
         status: 'running',
-        details: 'Analyzing project structure and dependencies...',
+        details: `正在分析 ${activeProjects.length} 个项目`,
         tools: []
       }]);
 
-      // Simulate tool call for analysis
-      await new Promise(r => setTimeout(r, 500));
-
-      setAgentSteps(prev => prev.map(s => s.id === analysisStepId ? {
-        ...s,
-        tools: [{
-          id: 'tool-read-pkg',
-          name: 'read_file',
-          input: { path: 'package.json' },
-          output: 'Reading...',
-          state: 'running'
-        }]
-      } : s));
-
-      // 获取项目上下文 (Agent 能力)
       let projectContext = "";
       try {
         // 仅为「本次勾选的提交实际涉及的项目」生成背景，避免未选中项目的背景成为噪音
-        const activeProjectNames = new Set(selectedLogs.map(l => l.project));
-        const activeProjects = projects.filter(p => activeProjectNames.has(p.alias || p.name));
         const contexts = await Promise.all(activeProjects.map(p => getProjectContext(p)));
         projectContext = contexts.join('\n');
 
-        setAgentSteps(prev => prev.map(s => s.id === analysisStepId ? {
+        setAgentSteps(prev => prev.map(s => s.id === contextStepId ? {
           ...s,
           status: 'completed',
-          details: `Analyzed ${activeProjects.length} projects.`,
+          details: `已读取 ${activeProjects.length} 个项目的背景资料`,
           tools: [{
-            id: 'tool-read-pkg',
-            name: 'read_file',
-            input: { path: 'package.json/README.md' },
-            output: { summary: 'Context extracted successfully' },
+            id: 'tool-project-context',
+            name: 'read_project_context',
+            input: { projects: activeProjects.map(p => p.alias || p.name) },
+            output: { chars: projectContext.length },
             state: 'completed'
           }]
         } : s));
       } catch (e) {
         console.warn("Failed to fetch project context", e);
-        setAgentSteps(prev => prev.map(s => s.id === analysisStepId ? { ...s, status: 'failed' } : s));
+        setAgentSteps(prev => prev.map(s => s.id === contextStepId ? { ...s, status: 'failed' } : s));
       }
 
-      // Step 3: Git History
-      const gitStepId = 'git-history';
+      // 步骤 2：清洗并按项目/模块归并提交（确定性处理，不依赖模型）
+      const aggregateStepId = 'aggregate';
       setAgentSteps(prev => [...prev, {
-        id: gitStepId,
+        id: aggregateStepId,
         type: 'task',
-        title: 'Commit History Analysis',
+        title: '清洗与归并提交',
         status: 'running',
-        details: `Processing ${selectedLogs.length} commits...`,
+        details: `正在处理 ${selectedLogs.length} 条提交`,
         tools: []
       }]);
 
-      // 格式化 commit 记录供 AI 阅读（仅勾选的提交）
-      const commitsText = selectedLogs.map(log => `[${log.project}] ${log.message} (${log.date})`).join('\n');
+      const aggregated = aggregateCommits(selectedLogs);
+      const commitsText = formatForPrompt(aggregated);
+      const keptItems = aggregated.groups.reduce((n, g) => n + g.items.length, 0);
 
-      await new Promise(r => setTimeout(r, 600));
-
-      setAgentSteps(prev => prev.map(s => s.id === gitStepId ? {
+      setAgentSteps(prev => prev.map(s => s.id === aggregateStepId ? {
         ...s,
         status: 'completed',
+        details:
+          `${aggregated.totalInput} 条提交 → ${aggregated.groups.length} 个模块组 / ${keptItems} 条待提炼` +
+          `（过滤噪音 ${aggregated.droppedNoise} 条，重复合并 ${aggregated.deduped} 条` +
+          (aggregated.truncated > 0 ? `，超出上限省略 ${aggregated.truncated} 条` : '') + '）',
         tools: [{
-          id: 'tool-git-log',
-          name: 'git_log',
-          input: { since: dateRange?.from, until: dateRange?.to },
-          output: { count: selectedLogs.length },
+          id: 'tool-aggregate',
+          name: 'aggregate_commits',
+          input: {
+            提交数: aggregated.totalInput,
+            日期范围: [
+              dateRange?.from ? dayjs(dateRange.from).format('YYYY-MM-DD') : '',
+              dateRange?.to ? dayjs(dateRange.to).format('YYYY-MM-DD') : '',
+            ],
+          },
+          output: {
+            模块组: aggregated.groups.map(g => `[${g.project}] ${g.module} ×${g.commitCount}`),
+            过滤噪音: aggregated.droppedNoise,
+            重复合并: aggregated.deduped,
+            超限省略: aggregated.truncated,
+          },
           state: 'completed'
         }]
       } : s));
 
-      // Step 4: Report Generation
+      if (keptItems === 0) {
+        throw new Error('所选提交经过滤后没有可用内容（可能全部是合并、版本号或临时提交）');
+      }
+
+      // 步骤 3：调用模型生成
       const genStepId = 'generation';
       setAgentSteps(prev => [...prev, {
         id: genStepId,
         type: 'task',
-        title: 'Report Generation',
+        title: '生成周报',
         status: 'running',
-        details: `Streaming content from ${activeProviderLabel}...`,
+        details: `${activeProviderLabel} 流式输出中`,
         tools: []
       }]);
 
-      const reportContent = await generateWeeklyReport(
+      const rawReport = await generateWeeklyReport(
         settings,
         settings.promptTemplate,
         commitsText,
@@ -306,9 +307,33 @@ export default function Dashboard() {
         abortControllerRef.current.signal
       );
 
-      // Finalize
-      setAgentSteps(prev => prev.map(s => s.id === genStepId ? { ...s, status: 'completed' } : s));
+      setAgentSteps(prev => prev.map(s => s.id === genStepId ? {
+        ...s,
+        status: 'completed',
+        details: `已生成 ${rawReport.length} 字`,
+      } : s));
+
+      // 步骤 4：兜底清洗 + 补周期抬头（日期取本地范围，不依赖模型自己写）
+      const cleanupStepId = 'cleanup';
+      const rangeStart = dateRange?.from ? dayjs(dateRange.from).format('YYYY-MM-DD') : '';
+      const rangeEnd = dateRange?.to ? dayjs(dateRange.to).format('YYYY-MM-DD') : '';
+      const cleaned = sanitizeReport(rawReport);
+      const reportContent = withReportHeader(cleaned, rangeStart, rangeEnd);
+      const removed = rawReport.length - cleaned.length;
+      setAgentSteps(prev => [...prev, {
+        id: cleanupStepId,
+        type: 'task',
+        title: '清洗成稿',
+        status: 'completed',
+        details: removed > 0 ? `清除了 ${removed} 个字符的技术标记` : '未发现需要清除的技术标记',
+        tools: []
+      }]);
       setGeneratedReport(reportContent);
+
+      // 中断或模型空转时不要把空周报写进历史记录
+      if (!reportContent.trim()) {
+        throw new Error('模型没有产出有效内容，本次不保存');
+      }
 
       // 保存到历史记录
       const newReport: Report = {
@@ -437,11 +462,10 @@ export default function Dashboard() {
     const today = dayjs();
     const start = dayjs(dateRange.from);
 
-    // 如果是本周（开始时间是本周一），则计算 "今天 - 周一 + 1"
-    if (today.isSame(start, 'week')) {
-      // 限制最大为 5 (防止周末显示 6/5 或 7/5)
-      const currentDay = Math.min(today.day() || 7, 5); // 周日(0)转为7，再限制为5
-      return `${currentDay}/5`;
+    // 若选中的正是本周，显示「已过天数/5」；同样避开 locale 相关的 isSame('week')
+    if (mondayOf(today).isSame(mondayOf(start), 'day')) {
+      const elapsed = today.startOf('day').diff(mondayOf(today), 'day') + 1;
+      return `${Math.min(Math.max(elapsed, 1), 5)}/5`;
     }
 
     // 如果不是本周（是历史周），则显示选定范围的天数
