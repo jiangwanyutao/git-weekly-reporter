@@ -8,12 +8,11 @@ import { toast } from '@/hooks/use-toast';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
 import dayjs from 'dayjs';
-import relativeTime from 'dayjs/plugin/relativeTime';
-import 'dayjs/locale/zh-cn';
 import { syncReportToNotion } from '@/lib/notion';
 
-dayjs.extend(relativeTime);
-dayjs.locale('zh-cn');
+// dayjs 的插件与 locale 统一在 src/main.tsx 里初始化。
+// 曾经放在这里，导致 import 本页就把全局 weekStart 改成周一，
+// 把 Dashboard 的「本周一~本周五」算成了周二~周六。
 
 import { useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
