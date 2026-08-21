@@ -70,7 +70,9 @@ export async function fetchGitLogs(
     // 组装 git log 参数。统一带 ref，使 %S（reached-by ref）在各模式下都能还原真实分支
     const args = ['-C', projectPath, 'log'];
     if (branchMode === 'all') {
-      args.push('--all');
+      // 只扫本地与远程分支。不能用 --all：它会把 refs/stash 也算进来，
+      // 于是暂存区里没提交的东西会被当成本周工作写进周报。
+      args.push('--branches', '--remotes');
     } else if (branchMode === 'specific' && project.branch) {
       args.push(project.branch);
     } else {
