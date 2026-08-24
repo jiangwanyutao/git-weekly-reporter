@@ -17,7 +17,8 @@ export const handleWindowDrag = (e: React.MouseEvent) => {
   void getCurrentWindow().startDragging();
 };
 
-export const TITLEBAR_HEIGHT = 'h-10'; // 40px
+// 标题栏高度。侧边栏头部也用它对齐，改这里两边一起生效
+export const TITLEBAR_HEIGHT = 'h-12'; // 48px
 
 // 应用主题到 document
 const applyTheme = (theme: 'light' | 'dark' | 'system') => {
