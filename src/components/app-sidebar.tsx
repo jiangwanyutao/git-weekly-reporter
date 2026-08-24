@@ -93,7 +93,7 @@ export function AppSidebar() {
     <Sidebar>
       <SidebarHeader
         onMouseDown={handleWindowDrag}
-        className={`${TITLEBAR_HEIGHT} flex items-center select-none cursor-default`}
+        className={`${TITLEBAR_HEIGHT} shrink-0 flex items-center select-none cursor-default`}
       >
         <div className="flex items-center gap-2 px-2">
           <FileText className="h-6 w-6 text-primary" />

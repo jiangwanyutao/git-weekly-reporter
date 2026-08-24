@@ -18,7 +18,7 @@ export const handleWindowDrag = (e: React.MouseEvent) => {
 };
 
 // 标题栏高度。侧边栏头部也用它对齐，改这里两边一起生效
-export const TITLEBAR_HEIGHT = 'h-12'; // 48px
+export const TITLEBAR_HEIGHT = 'h-14'; // 56px
 
 // 应用主题到 document
 const applyTheme = (theme: 'light' | 'dark' | 'system') => {
@@ -77,7 +77,7 @@ export function TitleBar() {
   return (
     <div
       onMouseDown={handleWindowDrag}
-      className={`${TITLEBAR_HEIGHT} flex items-center justify-between bg-background select-none border-b border-border/50`}
+      className={`${TITLEBAR_HEIGHT} shrink-0 flex items-center justify-between bg-background select-none border-b border-border/50`}
     >
       {/* 左侧留空作为窗口拖拽区（标题统一由侧边栏展示，避免重复） */}
       <div className="flex-1" />

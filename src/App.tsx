@@ -21,7 +21,7 @@ function App() {
     <div className="h-screen w-screen flex flex-col overflow-hidden bg-background text-foreground font-sans antialiased">
       <TitleBar />
       <Router>
-        <SidebarProvider className="flex-1 overflow-hidden">
+        <SidebarProvider className="flex-1 !min-h-0 overflow-hidden">
           <AppSidebar />
           <main className="flex-1 flex flex-col h-full overflow-hidden w-full">
             <div className="p-2 md:hidden">
