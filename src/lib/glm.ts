@@ -1,7 +1,5 @@
 import type { AppSettings, ModelProvider, ProviderProtocol } from '@/types';
 
-export const abortController = new AbortController();
-
 // 从设置中取出当前生效的提供商（找不到则回退到第一个）
 export function getActiveProvider(settings: AppSettings): ModelProvider | undefined {
   const list = settings.providers || [];
@@ -73,7 +71,9 @@ function buildRequestBody(
   protocol: ProviderProtocol,
   model: string,
   userPrompt: string,
-  stream: boolean
+  stream: boolean,
+  // 非流式默认按连通性测试给 64；润色整篇周报要显式放开
+  maxTokens?: number
 ) {
   const base = {
     model,
@@ -83,7 +83,7 @@ function buildRequestBody(
     temperature: stream ? 0.3 : 1.0,
     // 提交多的一周条目数会明显变多，且带思考的模型会先耗掉一大块预算；
     // 预算给足，真正防失控靠下面的流式护栏而不是靠这个上限
-    max_tokens: stream ? 32768 : 64,
+    max_tokens: maxTokens ?? (stream ? 32768 : 64),
   };
 
   if (protocol === 'minimax') {
@@ -397,4 +397,60 @@ ${projectContext}
     console.error("GLM API Error:", error);
     throw error;
   }
+}
+
+// 二次润色：只把指定的技术词所在句子改写成人话，其余一个字不动。
+// 仅在确定性扫描真的发现残留时才调用，干净的周报不会走到这里。
+// 调用方负责校验结构指纹，发现模型改坏了就退回原稿。
+export async function polishReport(
+  settings: AppSettings,
+  markdown: string,
+  jargon: string[],
+  signal?: AbortSignal
+): Promise<string> {
+  const provider = getActiveProvider(settings);
+  if (!provider?.apiKey) throw new Error("未配置模型，无法润色");
+  if (!jargon.length) return markdown;
+
+  if (provider.apiKey === "MOCK") {
+    return jargon.reduce((text, w) => text.split(w).join('相关配置'), markdown);
+  }
+
+  const prompt = `下面是一份已经写好的周报，整体没问题，只是个别地方混进了读者看不懂的技术词。
+
+请只做一件事：把下列技术词所在的句子改写成人话，**其他内容一个字都不要动**。
+
+需要处理的技术词：
+${jargon.map((w) => `- ${w}`).join('\n')}
+
+改写要求：
+- 项目分段、条目编号、加粗标题的格式必须完全保持原样
+- 不许增加、删除或合并任何条目
+- 用这项改动对**使用者**的意义来表述；实在判断不出含义的，就把该技术词连同它所在的短语一起去掉，保证句子读得通
+- 直接输出改写后的完整周报，不要任何解释或前后缀
+
+周报正文：
+${markdown}`;
+
+  const response = await fetch(buildEndpoint(provider), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${provider.apiKey}`,
+    },
+    body: JSON.stringify(
+      // 输出是整篇周报，预算按原文长度放宽
+      buildRequestBody(provider.protocol, provider.model, prompt, false, 16384)
+    ),
+    signal,
+  });
+
+  if (!response.ok) throw await buildProviderError(response, provider.name);
+
+  const data = await response.json();
+  const text = data?.choices?.[0]?.message?.content;
+  if (typeof text !== 'string' || !text.trim()) {
+    throw new Error(`${provider.name} 润色未返回内容`);
+  }
+  return text.trim();
 }

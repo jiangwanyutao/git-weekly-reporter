@@ -2,8 +2,8 @@
 import { useEffect, useState, useRef, useMemo } from 'react';
 import { useAppStore } from '@/store';
 import { fetchGitLogs, getProjectContext, getProjectAuthors } from '@/lib/git';
-import { generateWeeklyReport, getActiveProvider } from '@/lib/glm';
-import { aggregateCommits, formatForPrompt, sanitizeReport, withReportHeader } from '@/lib/commits';
+import { generateWeeklyReport, getActiveProvider, polishReport } from '@/lib/glm';
+import { aggregateCommits, formatForPrompt, sanitizeReport, withReportHeader, findJargon, reportShape } from '@/lib/commits';
 import { syncReportToNotion } from '@/lib/notion';
 import { CommitLog, Report } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -317,9 +317,58 @@ export default function Dashboard() {
       const cleanupStepId = 'cleanup';
       const rangeStart = dateRange?.from ? dayjs(dateRange.from).format('YYYY-MM-DD') : '';
       const rangeEnd = dateRange?.to ? dayjs(dateRange.to).format('YYYY-MM-DD') : '';
-      const cleaned = sanitizeReport(rawReport);
-      const reportContent = withReportHeader(cleaned, rangeStart, rangeEnd);
+      let cleaned = sanitizeReport(rawReport);
       const removed = rawReport.length - cleaned.length;
+
+      // 步骤 5：仍有技术词才二次润色。干净时直接跳过，不产生额外调用。
+      const jargon = findJargon(cleaned);
+      if (jargon.length > 0) {
+        const polishStepId = 'polish';
+        setAgentSteps(prev => [...prev, {
+          id: polishStepId,
+          type: 'task',
+          title: '润色技术词',
+          status: 'running',
+          details: `发现 ${jargon.length} 处读者看不懂的词：${jargon.slice(0, 6).join('、')}${jargon.length > 6 ? ' 等' : ''}`,
+          tools: []
+        }]);
+
+        try {
+          const polished = await polishReport(
+            settings, cleaned, jargon, abortControllerRef.current.signal
+          );
+          const cleanedPolished = sanitizeReport(polished);
+          const left = findJargon(cleanedPolished);
+          // 结构被改动或没改善，一律退回原稿——宁可留几个词，也不能把周报改坏
+          const shapeKept = reportShape(cleanedPolished) === reportShape(cleaned);
+          const improved = left.length < jargon.length;
+
+          if (shapeKept && improved) {
+            cleaned = cleanedPolished;
+            setAgentSteps(prev => prev.map(s => s.id === polishStepId ? {
+              ...s,
+              status: 'completed',
+              details: `已改写 ${jargon.length - left.length} 处${left.length ? `，仍剩 ${left.length} 处` : '，全部处理完毕'}`,
+            } : s));
+          } else {
+            setAgentSteps(prev => prev.map(s => s.id === polishStepId ? {
+              ...s,
+              status: 'completed',
+              details: shapeKept ? '润色没有改善，保留原稿' : '润色改动了周报结构，已退回原稿',
+            } : s));
+          }
+        } catch (e: any) {
+          if (e?.name === 'AbortError') throw e;
+          console.warn('Polish failed, keeping original', e);
+          setAgentSteps(prev => prev.map(s => s.id === polishStepId ? {
+            ...s,
+            status: 'failed',
+            details: `润色失败，保留原稿：${e?.message || e}`,
+          } : s));
+        }
+      }
+
+      const reportContent = withReportHeader(cleaned, rangeStart, rangeEnd);
       setAgentSteps(prev => [...prev, {
         id: cleanupStepId,
         type: 'task',

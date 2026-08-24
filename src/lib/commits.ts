@@ -221,6 +221,38 @@ export function withReportHeader(markdown: string, start: string, end: string): 
   return `**周报周期：** ${start} - ${end}\n\n${body}`;
 }
 
+// 读者看不懂的技术词形态。只放误报率低的规则——命中就要多花一次模型调用，
+// 宁可漏检也不要把 MiniMax、GitHub 这类正常名词判成黑话。
+const JARGON_RULES: [string, RegExp][] = [
+  ['尺寸单位', /\b\d+(?:px|rem|em|vh|vw)\b/g],
+  ['代码写法', /[A-Za-z_][A-Za-z0-9_]*\s*=\s*(?:True|False|None|null|\d+)/g],
+  ['下划线标识符', /\b[a-z][a-z0-9]*_[a-z0-9_]+\b/g],
+  ['全大写常量', /\b[A-Z][A-Z0-9]*_[A-Z0-9_]+\b/g],
+  // 比 sanitizeReport 的删除规则更宽，多认 KB-G19 这种字母开头的编号。
+  // 这里只负责「发现了要送去润色」，不做删除，放宽一点更安全。
+  ['工单号', /\b[A-Z]{2,5}-[A-Z]?\d+[a-z]?\b/g],
+  ['文件路径', /[\w./-]+\.(?:md|json|ts|tsx|js|jsx|vue|py|toml|yml|yaml|sh|lock)\b/g],
+  // 只认带典型后缀的类名，避免误伤产品名
+  ['类名', /\b[A-Z][A-Za-z]*(?:Error|Exception|Session|Service|Controller|Handler|Manager|Factory|Repository)\b/g],
+];
+
+// 扫出周报里仍然存在的技术词（去重）。空数组表示干净，不需要再润色。
+export function findJargon(markdown: string): string[] {
+  const hits = new Set<string>();
+  for (const [, re] of JARGON_RULES) {
+    for (const m of markdown.match(re) || []) hits.add(m.trim());
+  }
+  return Array.from(hits);
+}
+
+// 周报的结构指纹：几个项目、多少个编号条目。
+// 二次润色后指纹必须不变，否则说明模型顺手改了结构，该退回原稿。
+export function reportShape(markdown: string): string {
+  const projects = (markdown.match(/\*\*【[^】]+】\*\*/g) || []).length;
+  const items = markdown.split('\n').filter((l) => /^\s*\d+\.\s/.test(l)).length;
+  return `${projects}项目/${items}条`;
+}
+
 // 生成后再兜一层：清掉模型漏抄出来的工单号、思维链标签等纯噪音
 export function sanitizeReport(markdown: string): string {
   return markdown
