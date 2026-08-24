@@ -6,7 +6,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { useAppStore, DEFAULT_PROMPT } from '@/store';
+import {
+  useAppStore,
+  DEFAULT_PROMPT,
+  DEFAULT_TEMPLATE_ID,
+  CUSTOM_TEMPLATE_ID,
+  PROMPT_TEMPLATES,
+} from '@/store';
 import { testModelConnection } from '@/lib/glm';
 import { getProjectBranches, getProjectAuthors } from '@/lib/git';
 import { normalizeProxyUrl } from '@/lib/utils';
@@ -784,7 +790,11 @@ export default function SettingsPage() {
                       variant="outline"
                       size="sm"
                       onClick={() => {
-                        setLocalSettings({ ...localSettings, promptTemplate: DEFAULT_PROMPT });
+                        setLocalSettings({
+                          ...localSettings,
+                          promptTemplate: DEFAULT_PROMPT,
+                          promptTemplateId: DEFAULT_TEMPLATE_ID,
+                        });
                         toast({ title: '已恢复默认提示词', description: '记得点击“保存”后生效' });
                       }}
                     >
@@ -793,14 +803,57 @@ export default function SettingsPage() {
                     </Button>
                   </CardHeader>
                   <CardContent className="px-0 py-2">
-                    <div className="space-y-2">
+                    <div className="space-y-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-sm">切换模板</Label>
+                        <Select
+                          value={localSettings.promptTemplateId || CUSTOM_TEMPLATE_ID}
+                          onValueChange={(id) => {
+                            const tpl = PROMPT_TEMPLATES.find((t) => t.id === id);
+                            if (!tpl) return; // 「自定义」只是状态展示，不覆盖用户内容
+                            setLocalSettings({
+                              ...localSettings,
+                              promptTemplate: tpl.content,
+                              promptTemplateId: tpl.id,
+                            });
+                            toast({ title: `已切换到「${tpl.name}」`, description: '记得点击“保存”后生效' });
+                          }}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="选择提示词模板" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {PROMPT_TEMPLATES.map((t) => (
+                              <SelectItem key={t.id} value={t.id}>
+                                <span className="font-medium">{t.name}</span>
+                                <span className="ml-2 text-xs text-muted-foreground">{t.description}</span>
+                              </SelectItem>
+                            ))}
+                            <SelectItem value={CUSTOM_TEMPLATE_ID} disabled>
+                              <span className="font-medium">自定义</span>
+                              <span className="ml-2 text-xs text-muted-foreground">下方内容被手动改过</span>
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          {PROMPT_TEMPLATES.find((t) => t.id === localSettings.promptTemplateId)?.description
+                            ?? '当前是自定义提示词，升级时不会被覆盖。'}
+                        </p>
+                      </div>
                       <Textarea
                         className="min-h-[200px] font-mono text-sm"
                         value={localSettings.promptTemplate}
-                        onChange={(e) => setLocalSettings({ ...localSettings, promptTemplate: e.target.value })}
+                        onChange={(e) =>
+                          setLocalSettings({
+                            ...localSettings,
+                            promptTemplate: e.target.value,
+                            // 手动改过就标为自定义，之后升级不再覆盖
+                            promptTemplateId: CUSTOM_TEMPLATE_ID,
+                          })
+                        }
                       />
                       <p className="text-xs text-muted-foreground">
-                        可用变量: <code>{`{{commits}}`}</code> - 将被替换为具体的 Git 提交记录。若周报仍偏“流水账”，可点右上角“恢复默认”应用新版提示词。
+                        可用变量: <code>{`{{commits}}`}</code> - 将被替换为具体的 Git 提交记录。生成效果不满意时，可在上方切换到别的模板重新生成。
                       </p>
                     </div>
                   </CardContent>

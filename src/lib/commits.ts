@@ -5,14 +5,13 @@ const MAX_GROUPS_PER_PROJECT = 30;
 const MAX_ITEMS_PER_GROUP = 50;
 const MAX_TOTAL_ITEMS = 260;
 
-// 一个模块该在周报里占几条，由它的提交次数决定，代码算好直接告诉模型，
-// 不让模型自己拍脑袋——否则 45 次提交的模块也只会被写成一条。
-function suggestedItems(commitCount: number): [number, number] {
-  if (commitCount >= 40) return [3, 4];
-  if (commitCount >= 20) return [2, 3];
-  if (commitCount >= 10) return [2, 2];
-  if (commitCount >= 3) return [1, 1];
-  return [0, 0]; // 只有一两次提交，并入「其他优化与修复」
+// 提交少于这个数的模块不单独成条，并进「其他优化与修复」
+const MIN_COMMITS_FOR_OWN_ITEM = 3;
+
+// 这里只报事实（体量够独立成条的模块有几个），不规定该写几条。
+// 颗粒度由提示词模板决定，否则切换模板时两边的指令会互相打架。
+function standaloneCount(groups: CommitGroup[]): number {
+  return groups.filter((g) => g.commitCount >= MIN_COMMITS_FOR_OWN_ITEM).length;
 }
 
 // 整条丢弃：这些提交对周报读者没有任何信息量
@@ -194,36 +193,20 @@ export function formatForPrompt(result: AggregateResult): string {
 
   const blocks: string[] = [];
   for (const [project, groups] of byProject) {
-    let min = 0;
-    let max = 0;
-    let hasSmall = false;
-
     const lines = groups.map((g) => {
-      const [lo, hi] = suggestedItems(g.commitCount);
-      if (lo === 0) hasSmall = true;
-      min += lo;
-      max += hi;
-
       const head = g.module === '其他' ? '- 零散改动' : `- 模块「${g.module}」`;
-      const count = lo === hi ? `${lo}` : `${lo}~${hi}`;
-      const quota = lo === 0
-        ? `（共 ${g.commitCount} 次提交 → 并入「其他优化与修复」）`
-        : `（共 ${g.commitCount} 次提交 → 本模块请写成 ${count} 条）`;
+      const note = g.commitCount < MIN_COMMITS_FOR_OWN_ITEM
+        ? `（${g.commitCount} 次提交，体量小）`
+        : `（${g.commitCount} 次提交）`;
       const items = g.items.map((t) => `    · ${t}`).join('\n');
       const rest = g.omitted > 0 ? `\n    · （另有 ${g.omitted} 条同类改动未逐条列出）` : '';
-      return `${head}${quota}\n${items}${rest}`;
+      return `${head}${note}\n${items}${rest}`;
     });
 
-    // 零散模块合起来再占一条
-    if (hasSmall) { min += 1; max += 1; }
-    // 单模块项目不能因为模块少就少写，按模块内的不同方向拆开
-    min = Math.max(min, 3);
-    max = Math.max(max, min);
-
     const commits = groups.reduce((n, g) => n + g.commitCount, 0);
-    const total = min === max ? `${min}` : `${min}~${max}`;
     blocks.push(
-      `## 项目 [${project}]（${commits} 次提交，${groups.length} 个模块方向 → 本项目合计请写 ${total} 条）\n` +
+      `## 项目 [${project}]（${commits} 次提交，${groups.length} 个模块方向，` +
+      `其中 ${standaloneCount(groups)} 个体量够独立成条）\n` +
       lines.join('\n')
     );
   }
