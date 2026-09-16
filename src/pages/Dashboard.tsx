@@ -484,7 +484,7 @@ export default function Dashboard() {
       </div>
 
       {/* 统计 */}
-      <div className="grid shrink-0 grid-cols-2 gap-3 xl:grid-cols-4">
+      <div className="grid shrink-0 grid-cols-2 gap-3 lg:grid-cols-4">
         <StatTile icon={<GitCommitIcon size={20} />} tone="primary" label="本周提交" value={logs.length} sub={`已选 ${selectedLogs.length}`} tag="当前筛选范围" />
         <StatTile icon={<FileTextIcon size={20} />} tone="success" label="已生成周报" value={reports.length} tag="历史总计" />
         <StatTile
@@ -503,8 +503,8 @@ export default function Dashboard() {
         {/* 左：提交列表 */}
         <div className="flex h-full flex-col overflow-hidden" style={{ width: `${leftPanelWidth}%` }}>
           <div className="flex min-h-[54px] shrink-0 items-center gap-3 border-b border-border px-3.5">
-            <h2 className="text-sm font-semibold">提交记录</h2>
-            <div className="flex items-center gap-2.5 text-xs text-muted-foreground">
+            <h2 className="shrink-0 whitespace-nowrap text-sm font-semibold">提交记录</h2>
+            <div className="flex min-w-0 items-center gap-2.5 overflow-hidden whitespace-nowrap text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1" title="已选 / 提交总数">
                 <GitCommitIcon size={13} /> {selectedLogs.length} / {logs.length} 已选
               </span>
@@ -602,8 +602,8 @@ export default function Dashboard() {
         {/* 右：周报预览 */}
         <div className="flex h-full flex-1 flex-col overflow-hidden">
           <div className="flex min-h-[54px] shrink-0 items-center gap-3 border-b border-border px-3.5">
-            <h2 className="text-sm font-semibold">周报预览</h2>
-            <span className="text-xs text-muted-foreground">
+            <h2 className="shrink-0 whitespace-nowrap text-sm font-semibold">周报预览</h2>
+            <span className="truncate text-xs text-muted-foreground">
               {generating ? `AI 生成中 · 已生成 ${generatedReport.length} 字` : generatedReport ? '生成完成' : '选择提交后点击生成'}
             </span>
             <div className="ml-auto flex items-center gap-2">
@@ -764,13 +764,13 @@ function StatTile({
     <div className="flex items-center gap-3.5 rounded-[10px] border border-border bg-card px-4 py-3.5 shadow-sm">
       <div className={cn('grid h-[38px] w-[38px] shrink-0 place-items-center rounded-[9px]', TONE[tone])}>{icon}</div>
       <div className="min-w-0">
-        <div className="text-xs text-muted-foreground">{label}</div>
-        <div className="text-2xl font-semibold leading-tight tracking-tight tabular-nums">
+        <div className="whitespace-nowrap text-xs text-muted-foreground">{label}</div>
+        <div className="whitespace-nowrap text-2xl font-semibold leading-tight tracking-tight tabular-nums">
           {value}
           {sub && <span className="ml-1 text-xs font-medium text-muted-foreground">{sub}</span>}
         </div>
       </div>
-      {tag && <span className="ml-auto shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">{tag}</span>}
+      {tag && <span className="ml-auto hidden shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground xl:inline-flex">{tag}</span>}
     </div>
   );
 }
