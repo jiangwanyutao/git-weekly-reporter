@@ -3,7 +3,20 @@ import { useAppStore } from '@/store';
 import { Report } from '@/types';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Trash2, FileText, Calendar, Copy, Check, Download, GitBranch, GitCommit, Layers, Loader2, Send } from 'lucide-react';
+import {
+  MagnifyingGlassIcon,
+  DownloadSimpleIcon,
+  CopyIcon,
+  PaperPlaneTiltIcon,
+  TrashIcon,
+  ClockIcon,
+  GitCommitIcon,
+  GitBranchIcon,
+  FolderIcon,
+  CheckIcon,
+  SpinnerIcon,
+  FileTextIcon,
+} from '@phosphor-icons/react';
 import { toast } from '@/hooks/use-toast';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
@@ -16,25 +29,33 @@ import { syncReportToNotion } from '@/lib/notion';
 
 import { useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Separator } from "@/components/ui/separator"
 import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
 import { DatePickerWithRange } from '@/components/ui/date-range-picker';
 import { DateRange } from "react-day-picker";
 import { cn } from "@/lib/utils"
 
 const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
+type Scope = 'all' | 'month';
+
+// 列表摘要：去掉标题行和 Markdown 标记，只留正文开头
+function excerpt(content: string) {
+  // 去掉标题行与「周报周期」抬头，只留正文
+  return content.replace(/^(#.*|\**周报周期.*)$/gm, '').replace(/[*`>_]/g, '').replace(/\s+/g, ' ').trim().slice(0, 120);
+}
+
 export default function HistoryPage() {
   const { reports, deleteReport, settings } = useAppStore();
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [scope, setScope] = useState<Scope>('all');
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [syncingReportId, setSyncingReportId] = useState<string | null>(null);
   const exportTitle = isTauri ? "导出当前列表到本地文件" : "导出当前列表（浏览器下载）";
 
   const handleDelete = (id: string) => {
+    if (!window.confirm('确定删除这份周报？删除后无法恢复。')) return;
     deleteReport(id);
     if (selectedId === id) {
       setSelectedId(null);
@@ -153,7 +174,10 @@ export default function HistoryPage() {
         dayjs(report.createdAt).format('YYYY-MM-DD').includes(searchQuery)
         : true;
 
-      // 2. 日期范围过滤 (基于生成时间)
+      // 2. 本月：按生成时间落在当前自然月
+      const matchesScope = scope === 'month' ? dayjs(report.createdAt).isSame(dayjs(), 'month') : true;
+
+      // 3. 日期范围过滤 (基于生成时间)
       let matchesDate = true;
       if (dateRange?.from) {
         const reportDate = dayjs(report.createdAt);
@@ -163,220 +187,192 @@ export default function HistoryPage() {
         matchesDate = !reportDate.isBefore(fromDate) && !reportDate.isAfter(toDate);
       }
 
-      return matchesSearch && matchesDate;
+      return matchesSearch && matchesScope && matchesDate;
     }).sort((a, b) => b.createdAt - a.createdAt); // 默认按时间倒序
-  }, [reports, searchQuery, dateRange]);
+  }, [reports, searchQuery, scope, dateRange]);
 
   const selectedReport = useMemo(() =>
     reports.find(r => r.id === selectedId) || filteredReports[0] || null,
     [reports, selectedId, filteredReports]);
 
+  const rangeLabel = (r: Report) => `${dayjs(r.dateRange.start).format('YYYY-MM-DD')} 至 ${dayjs(r.dateRange.end).format('MM-DD')}`;
+
   return (
-    <div className="flex-1 p-4 h-full flex overflow-hidden gap-4">
-      {/* 左侧列表面板 */}
-      <div className="w-[clamp(260px,26vw,380px)] shrink-0 flex flex-col border rounded-lg bg-background overflow-hidden">
-        <div className="p-4 space-y-4 border-b shrink-0">
-          <div className="flex items-center justify-between">
-            <h1 className="text-xl font-bold">历史周报</h1>
-            <div className="flex items-center gap-2">
-              <Badge variant="secondary">{filteredReports.length} 份</Badge>
-              <Button variant="outline" size="icon" className="h-6 w-6" onClick={handleExportAll} title={exportTitle}>
-                <Download className="h-3.5 w-3.5" />
-              </Button>
+    <div className="flex h-full flex-col gap-4 overflow-hidden px-6 py-5">
+      {/* 页头 */}
+      <div className="flex shrink-0 flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="page-title">历史周报</h1>
+          <p className="page-subtitle">共 {reports.length} 份 · 本地保存，可导出 JSON</p>
+        </div>
+        <Button variant="outline" onClick={handleExportAll} title={exportTitle}>
+          <DownloadSimpleIcon size={16} />
+          导出全部
+        </Button>
+      </div>
+
+      <div className="grid min-h-0 flex-1 grid-cols-[360px_1fr] gap-4">
+        {/* 左侧列表 */}
+        <div className="flex min-h-0 flex-col rounded-[10px] border border-border bg-card shadow-sm">
+          <div className="flex shrink-0 flex-col gap-2 border-b border-border px-3.5 py-3">
+            <div className="relative">
+              <MagnifyingGlassIcon size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="搜索周报内容…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="h-8 pl-8 text-[13px]"
+              />
             </div>
-          </div>
-          <div className="space-y-2">
-            <Input
-              placeholder="搜索周报内容..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-8"
-            />
-            <div className="flex">
+            <div className="flex items-center gap-2">
+              <div className="inline-flex h-8 items-center rounded-md border border-border bg-muted p-[3px]">
+                {(
+                  [
+                    ['all', '全部'],
+                    ['month', '本月'],
+                  ] as const
+                ).map(([key, label]) => (
+                  <button
+                    key={key}
+                    onClick={() => setScope(key)}
+                    className={cn(
+                      'h-full rounded-[5px] px-3 text-[13px] font-medium text-muted-foreground transition-colors',
+                      scope === key && 'bg-card text-foreground shadow-sm'
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
               <DatePickerWithRange
-                className="w-full [&>button]:w-full"
                 date={dateRange}
                 setDate={setDateRange}
+                className="ml-auto min-w-0 [&_button]:h-8 [&_button]:px-2.5 [&_button]:text-xs"
               />
             </div>
           </div>
-        </div>
 
-        <ScrollArea className="flex-1">
-          <div className="flex flex-col gap-2 p-4">
+          <ScrollArea className="min-h-0 flex-1">
             {filteredReports.length === 0 ? (
-              <div className="text-center text-muted-foreground py-8 text-sm">
-                没有找到相关周报
+              <div className="flex flex-col items-center gap-2 py-16 text-center text-muted-foreground">
+                <FileTextIcon size={28} className="opacity-40" />
+                <p className="text-sm">{reports.length === 0 ? '还没有生成过周报' : '没有找到相关周报'}</p>
               </div>
             ) : (
               filteredReports.map((report) => {
                 const isSelected = selectedReport?.id === report.id;
-                // 选中/默认下的次要文本色（含 hover 态）
-                const mutedText = isSelected ? "text-accent-foreground" : "text-muted-foreground";
-                const badgeText = isSelected ? "text-accent-foreground border-accent-foreground/30" : "text-muted-foreground";
                 return (
-                <div
-                  key={report.id}
-                  role="button"
-                  tabIndex={0}
-                  className={cn(
-                    "flex flex-col items-start gap-2 rounded-lg border p-3 text-left text-sm transition-all hover:bg-accent hover:text-accent-foreground group",
-                    isSelected ? "bg-accent text-accent-foreground" : "bg-card"
-                  )}
-                  onClick={() => setSelectedId(report.id)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      setSelectedId(report.id);
-                    }
-                  }}
-                >
-                  <div className="flex w-full flex-col gap-1">
-                    <div className="flex items-center">
-                      <div className="flex items-center gap-2">
-                        <div className="font-semibold">
-                          {dayjs(report.createdAt).format('YYYY年MM月DD日')}
-                        </div>
-                        {!report.status && <span className="flex h-2 w-2 rounded-full bg-blue-600" />}
-                      </div>
-                      <div className={cn("ml-auto text-xs group-hover:text-accent-foreground", mutedText)}>
-                        {dayjs(report.createdAt).fromNow()}
-                      </div>
+                  <div
+                    key={report.id}
+                    role="button"
+                    tabIndex={0}
+                    className={cn(
+                      'relative cursor-pointer border-b border-border px-3.5 py-3 transition-colors hover:bg-muted/60',
+                      isSelected &&
+                        'bg-accent hover:bg-accent before:absolute before:bottom-2 before:left-0 before:top-2 before:w-[3px] before:rounded-r before:bg-primary'
+                    )}
+                    onClick={() => setSelectedId(report.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setSelectedId(report.id);
+                      }
+                    }}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <b className="truncate text-[13px] font-semibold tabular-nums">{rangeLabel(report)}</b>
+                      <span className="shrink-0 text-[11px] text-muted-foreground">{dayjs(report.createdAt).fromNow()}</span>
                     </div>
-                    <div className={cn("text-xs font-medium group-hover:text-accent-foreground", mutedText)}>
-                      范围: {dayjs(report.dateRange.start).format('MM/DD')} - {dayjs(report.dateRange.end).format('MM/DD')}
-                    </div>
-                  </div>
-                  <div className={cn("line-clamp-2 text-xs w-full group-hover:text-accent-foreground", mutedText)}>
-                    {report.content.substring(0, 100)}...
-                  </div>
-                  <div className="w-full mt-1 space-y-1.5">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Badge variant="outline" className={cn("text-[10px] px-1 py-0 transition-colors group-hover:text-accent-foreground", badgeText)}>
-                        {report.content.length} 字
-                      </Badge>
+                    <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">{excerpt(report.content)}</p>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
                       {report.totalCommits !== undefined && (
-                        <Badge variant="outline" className={cn("text-[10px] px-1 py-0 gap-1 transition-colors group-hover:text-accent-foreground", badgeText)}>
-                          <GitCommit className="h-3 w-3" />
-                          {report.totalCommits}
-                        </Badge>
+                        <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                          <GitCommitIcon size={11} /> {report.totalCommits}
+                        </span>
                       )}
-                      {report.branches && report.branches.length > 0 && (
-                        <Badge variant="outline" className={cn("text-[10px] px-1 py-0 gap-1 transition-colors group-hover:text-accent-foreground", badgeText)}>
-                          <GitBranch className="h-3 w-3" />
-                          {report.branches.length > 1 ? `${report.branches.length} 分支` : report.branches[0]}
-                        </Badge>
+                      {report.projects && report.projects.length > 0 && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                          <FolderIcon size={11} /> {report.projects.length} 项目
+                        </span>
                       )}
-                    </div>
-                    <div className="w-full flex items-center gap-2 flex-wrap justify-start">
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        className="h-7 px-2.5 text-xs gap-1 whitespace-nowrap"
-                        title="手动同步到 Notion"
-                        disabled={!!syncingReportId}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void handleSyncToNotion(report);
-                        }}
-                      >
-                        {syncingReportId === report.id ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Send className="h-3.5 w-3.5" />
-                        )}
-                        <span>同步 Notion</span>
-                      </Button>
                     </div>
                   </div>
-                </div>
                 );
               })
             )}
-          </div>
-        </ScrollArea>
-      </div>
+          </ScrollArea>
+        </div>
 
-      {/* 右侧详情面板 */}
-      <div className="flex-1 flex flex-col min-w-0 border rounded-lg bg-background overflow-hidden">
-        {selectedReport ? (
-          <div className="h-full flex flex-col">
-            <div className="flex flex-col gap-4 p-4 border-b shrink-0">
-              <div className="flex flex-col gap-1">
-                <h2 className="text-lg font-semibold flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-primary" />
-                  周报详情
-                </h2>
-              </div>
-              <div className="flex flex-col gap-2">
-                <div className="text-sm text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-2">
-                  <span className="flex items-center gap-1">
-                    <Calendar className="h-3.5 w-3.5" />
-                    {dayjs(selectedReport.createdAt).format('YYYY-MM-DD HH:mm')}
-                  </span>
-                  <span>
-                    覆盖: {dayjs(selectedReport.dateRange.start).format('MM-DD')} ~ {dayjs(selectedReport.dateRange.end).format('MM-DD')}
-                  </span>
-                  {selectedReport.totalCommits !== undefined && (
-                    <span className="flex items-center gap-1">
-                      <GitCommit className="h-3.5 w-3.5" />
-                      {selectedReport.totalCommits} commits
+        {/* 右侧详情 */}
+        <div className="flex min-h-0 flex-col overflow-hidden rounded-[10px] border border-border bg-card shadow-sm">
+          {selectedReport ? (
+            <>
+              <div className="flex shrink-0 items-start gap-3 border-b border-border px-[18px] py-4">
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-[15px] font-semibold tabular-nums">{rangeLabel(selectedReport)} 周报</h2>
+                  <div className="mt-1.5 flex flex-wrap gap-3.5 text-xs text-muted-foreground">
+                    <span className="inline-flex items-center gap-1">
+                      <ClockIcon size={13} /> 生成于 {dayjs(selectedReport.createdAt).format('MM-DD HH:mm')}
                     </span>
-                  )}
-                  {selectedReport.projects && selectedReport.projects.length > 0 && (
-                    <span className="flex items-center gap-1">
-                      <Layers className="h-3.5 w-3.5" />
-                      {selectedReport.projects.length} projects
-                    </span>
-                  )}
-                </div>
-                {selectedReport.branches && selectedReport.branches.length > 0 && (
-                  <div className="text-xs text-muted-foreground flex items-start gap-1">
-                    <GitBranch className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                    <span className="break-all">
-                      {selectedReport.branches.join(', ')}
-                    </span>
+                    {selectedReport.totalCommits !== undefined && (
+                      <span className="inline-flex items-center gap-1">
+                        <GitCommitIcon size={13} /> {selectedReport.totalCommits} 提交
+                      </span>
+                    )}
+                    {selectedReport.projects && selectedReport.projects.length > 0 && (
+                      <span className="inline-flex items-center gap-1">
+                        <FolderIcon size={13} /> {selectedReport.projects.join('、')}
+                      </span>
+                    )}
+                    {selectedReport.branches && selectedReport.branches.length > 0 && (
+                      <span className="inline-flex items-center gap-1 break-all">
+                        <GitBranchIcon size={13} className="shrink-0" /> {selectedReport.branches.join(', ')}
+                      </span>
+                    )}
                   </div>
-                )}
+                </div>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <Button variant="outline" size="sm" className="whitespace-nowrap" onClick={() => handleCopy(selectedReport)}>
+                    {copiedId === selectedReport.id ? <CheckIcon size={14} className="text-success" weight="bold" /> : <CopyIcon size={14} />}
+                    复制
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="whitespace-nowrap"
+                    title="手动同步到 Notion"
+                    disabled={!!syncingReportId}
+                    onClick={() => void handleSyncToNotion(selectedReport)}
+                  >
+                    {syncingReportId === selectedReport.id ? <SpinnerIcon size={14} className="animate-spin" /> : <PaperPlaneTiltIcon size={14} />}
+                    同步 Notion
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => handleDelete(selectedReport.id)}
+                    title="删除"
+                  >
+                    <TrashIcon size={16} />
+                  </Button>
+                </div>
               </div>
+              <ScrollArea className="min-h-0 flex-1">
+                <div className="px-7 py-5">
+                  <div className="report-md">
+                    <ReactMarkdown>{selectedReport.content}</ReactMarkdown>
+                  </div>
+                </div>
+              </ScrollArea>
+            </>
+          ) : (
+            <div className="flex flex-1 flex-col items-center justify-center gap-2.5 text-center text-muted-foreground">
+              <FileTextIcon size={40} className="opacity-30" />
+              <p className="text-sm">在左侧选择一份周报查看</p>
             </div>
-            <div className="flex items-center gap-2 px-4 py-2 border-b shrink-0">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleCopy(selectedReport)}
-              >
-                {copiedId === selectedReport.id ? (
-                  <Check className="mr-2 h-4 w-4 text-green-500" />
-                ) : (
-                  <Copy className="mr-2 h-4 w-4" />
-                )}
-                复制
-              </Button>
-              <Separator orientation="vertical" className="mx-1 h-6" />
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-destructive hover:text-destructive/90"
-                onClick={() => handleDelete(selectedReport.id)}
-                title="删除"
-              >
-                <Trash2 className="h-5 w-5" />
-              </Button>
-            </div>
-            <ScrollArea className="flex-1">
-              <div className="prose prose-sm dark:prose-invert max-w-none p-6">
-                <ReactMarkdown>{selectedReport.content}</ReactMarkdown>
-              </div>
-            </ScrollArea>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center h-full text-muted-foreground space-y-4">
-            <FileText className="h-16 w-16 opacity-20" />
-            <p>请选择一份周报查看详情</p>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
