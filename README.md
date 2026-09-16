@@ -1,19 +1,18 @@
-# Git Weekly Reporter — 基于 Git 提交记录的 AI 周报桌面应用
+<h2 align="center">Git Weekly Reporter：基于 Git 提交记录的 AI 周报桌面应用</h2>
 
-<p>
-  <img src="https://img.shields.io/badge/Version-1.2.0-blue.svg" alt="Version">
-  <img src="https://img.shields.io/badge/Tauri-2-24C8D8.svg" alt="Tauri">
-  <img src="https://img.shields.io/badge/React-19-61DAFB.svg" alt="React">
-  <img src="https://img.shields.io/badge/TypeScript-5.8-3178C6.svg" alt="TypeScript">
-  <img src="https://img.shields.io/badge/Vite-7-646CFF.svg" alt="Vite">
-  <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg" alt="Platform">
+<p align="center">
+  <a href="https://github.com/jiangwanyutao/git-weekly-reporter"><img src="https://img.shields.io/badge/Project%20Page-GitHub-blue" alt="Project Page"></a>
+  <a href="https://github.com/jiangwanyutao/git-weekly-reporter/releases/latest"><img src="https://img.shields.io/github/v/release/jiangwanyutao/git-weekly-reporter?label=Release&color=brightgreen" alt="Release"></a>
+  <img src="https://img.shields.io/badge/Tauri-2-24C8D8" alt="Tauri">
+  <img src="https://img.shields.io/badge/React-19-61DAFB" alt="React">
+  <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey" alt="Platform">
+  <a href="https://github.com/jiangwanyutao/git-weekly-reporter/stargazers"><img src="https://img.shields.io/github/stars/jiangwanyutao/git-weekly-reporter?style=flat" alt="Stars"></a>
 </p>
 
-<h2 align="center">🌐 下载与更新</h2>
 <p align="center">
-  <a href="https://github.com/jiangwanyutao/git-weekly-reporter/releases/latest"><strong>📦 最新安装包：GitHub Releases</strong></a>
-  &nbsp;&nbsp;·&nbsp;&nbsp;
-  <a href="docs/UPDATER_GUIDE.md"><strong>📘 发布与自动更新指南</strong></a><br>
+  <a href="https://github.com/jiangwanyutao/git-weekly-reporter/releases/latest"><b>📦 下载最新安装包</b></a>
+  &nbsp;|&nbsp;
+  <a href="docs/UPDATER_GUIDE.md"><b>📘 发布与自动更新指南</b></a><br>
   安装后应用会自动检查新版本，国内网络可在设置中配置代理地址。
 </p>
 
