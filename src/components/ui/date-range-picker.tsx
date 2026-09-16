@@ -43,7 +43,7 @@ export function DatePickerWithRange({
             id="date"
             variant={"outline"}
             className={cn(
-              "w-[300px] justify-start text-left font-normal",
+              "justify-start text-left font-normal tabular-nums",
               !date && "text-muted-foreground"
             )}
           >
@@ -51,11 +51,10 @@ export function DatePickerWithRange({
             {date?.from ? (
               date.to ? (
                 <>
-                  {format(date.from, "yyyy年MM月dd日", { locale: zhCN })} -{" "}
-                  {format(date.to, "yyyy年MM月dd日", { locale: zhCN })}
+                  {format(date.from, "yyyy-MM-dd", { locale: zhCN })} — {format(date.to, "MM-dd", { locale: zhCN })}
                 </>
               ) : (
-                format(date.from, "yyyy年MM月dd日", { locale: zhCN })
+                format(date.from, "yyyy-MM-dd", { locale: zhCN })
               )
             ) : (
               <span>选择日期</span>

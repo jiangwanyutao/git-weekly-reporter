@@ -1,142 +1,41 @@
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { Minus, Square, X, Sun, Moon, Monitor } from 'lucide-react';
-import { useAppStore } from '@/store';
-import { useEffect } from 'react';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { MinusIcon, SquareIcon, XIcon } from '@phosphor-icons/react';
 
 const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
-// 导出拖拽处理函数，供其他组件使用
 export const handleWindowDrag = (e: React.MouseEvent) => {
   if (e.button !== 0 || !isTauri) return;
   void getCurrentWindow().startDragging();
 };
 
-// 标题栏高度。侧边栏头部也用它对齐，改这里两边一起生效
-export const TITLEBAR_HEIGHT = 'h-14'; // 56px
-
-// 应用主题到 document
-const applyTheme = (theme: 'light' | 'dark' | 'system') => {
-  const root = document.documentElement;
-
-  if (theme === 'system') {
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    root.classList.toggle('dark', prefersDark);
-  } else {
-    root.classList.toggle('dark', theme === 'dark');
-  }
-};
+const winButton = 'h-full w-[46px] grid place-items-center text-muted-foreground transition-colors hover:bg-muted hover:text-foreground';
 
 export function TitleBar() {
-  const { settings, updateSettings } = useAppStore();
-  const theme = settings.theme || 'dark';
-
-  // 初始化和监听主题变化
-  useEffect(() => {
-    applyTheme(theme);
-
-    // 监听系统主题变化
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const handleChange = () => {
-      if (theme === 'system') {
-        applyTheme('system');
-      }
-    };
-    mediaQuery.addEventListener('change', handleChange);
-    return () => mediaQuery.removeEventListener('change', handleChange);
-  }, [theme]);
-
-  const handleThemeChange = (newTheme: 'light' | 'dark' | 'system') => {
-    updateSettings({ theme: newTheme });
-  };
-
-  const handleMinimize = () => {
-    if (!isTauri) return;
-    void getCurrentWindow().minimize();
-  };
-  const handleMaximize = () => {
-    if (!isTauri) return;
-    void getCurrentWindow().toggleMaximize();
-  };
-  const handleClose = () => {
-    if (!isTauri) return;
-    void getCurrentWindow().close();
-  };
-
-  const themeIcon = {
-    light: <Sun className="h-4 w-4" />,
-    dark: <Moon className="h-4 w-4" />,
-    system: <Monitor className="h-4 w-4" />,
-  };
-
+  const win = () => getCurrentWindow();
   return (
     <div
       onMouseDown={handleWindowDrag}
-      className={`${TITLEBAR_HEIGHT} shrink-0 flex items-center justify-between bg-background select-none border-b border-border/50`}
+      className="h-10 shrink-0 flex items-center gap-2 pl-4 bg-card border-b border-border select-none text-xs text-muted-foreground"
     >
-      {/* 左侧留空作为窗口拖拽区（标题统一由侧边栏展示，避免重复） */}
-      <div className="flex-1" />
-
-      {/* 右侧控制按钮 */}
-      <div className="flex h-full items-center" onMouseDown={(e) => e.stopPropagation()}>
-        {/* 主题切换 */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              className="h-full px-3 hover:bg-muted transition-colors flex items-center gap-1.5"
-              title="切换主题"
-            >
-              {themeIcon[theme]}
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="min-w-[120px]">
-            <DropdownMenuItem onClick={() => handleThemeChange('light')} className="cursor-pointer">
-              <Sun className="mr-2 h-4 w-4" />
-              浅色
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleThemeChange('dark')} className="cursor-pointer">
-              <Moon className="mr-2 h-4 w-4" />
-              深色
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleThemeChange('system')} className="cursor-pointer">
-              <Monitor className="mr-2 h-4 w-4" />
-              跟随系统
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        {/* 窗口控制按钮 */}
-        {isTauri && (
-          <>
-            <button
-              onClick={handleMinimize}
-              className="h-full px-4 hover:bg-muted transition-colors"
-              title="最小化"
-            >
-              <Minus className="h-4 w-4" />
-            </button>
-            <button
-              onClick={handleMaximize}
-              className="h-full px-4 hover:bg-muted transition-colors"
-              title="最大化"
-            >
-              <Square className="h-3.5 w-3.5" />
-            </button>
-            <button
-              onClick={handleClose}
-              className="h-full px-4 hover:bg-destructive hover:text-destructive-foreground transition-colors"
-              title="关闭"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </>
-        )}
-      </div>
+      <img src="/logo.png" alt="" className="h-[18px] w-[18px] rounded-[5px]" draggable={false} />
+      <span>AI 周报助手</span>
+      {isTauri && (
+        <div className="ml-auto flex h-full items-center" onMouseDown={(e) => e.stopPropagation()}>
+          <button onClick={() => void win().minimize()} className={winButton} title="最小化">
+            <MinusIcon size={14} />
+          </button>
+          <button onClick={() => void win().toggleMaximize()} className={winButton} title="最大化">
+            <SquareIcon size={12} />
+          </button>
+          <button
+            onClick={() => void win().close()}
+            className={`${winButton} hover:bg-destructive hover:text-destructive-foreground`}
+            title="关闭"
+          >
+            <XIcon size={14} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

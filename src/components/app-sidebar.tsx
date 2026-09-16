@@ -1,153 +1,149 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Settings, FileText, FolderPlus, History, RefreshCcw } from 'lucide-react';
-import { handleWindowDrag, TITLEBAR_HEIGHT } from '@/components/TitleBar';
+import {
+  HouseIcon,
+  ClockCounterClockwiseIcon,
+  GearSixIcon,
+  PlusIcon,
+  ArrowsClockwiseIcon,
+  SunIcon,
+  MoonIcon,
+  MonitorIcon,
+} from '@phosphor-icons/react';
 import { useAppStore } from '@/store';
+import { getActiveProvider } from '@/lib/glm';
 import { open } from '@tauri-apps/plugin-dialog';
 import { toast } from '@/hooks/use-toast';
-import { getVersion } from '@tauri-apps/api/app';
-import { useState, useEffect } from 'react';
+import { useTheme, type Theme } from '@/hooks/use-theme';
 import { useUpdateDialog } from '@/components/UpdateDialog';
+import { cn } from '@/lib/utils';
 import {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarSeparator,
-} from '@/components/ui/sidebar';
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
+const ROUTES = [
+  { label: '仪表盘', icon: HouseIcon, href: '/' },
+  { label: '历史周报', icon: ClockCounterClockwiseIcon, href: '/history' },
+  { label: '系统配置', icon: GearSixIcon, href: '/settings' },
+];
+
+const THEME_OPTIONS: { value: Theme; label: string; icon: typeof SunIcon }[] = [
+  { value: 'light', label: '浅色', icon: SunIcon },
+  { value: 'dark', label: '深色', icon: MoonIcon },
+  { value: 'system', label: '跟随系统', icon: MonitorIcon },
+];
+
+const navItem =
+  'relative flex h-9 items-center gap-2.5 rounded-md px-2.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground';
+const navActive =
+  'bg-accent text-accent-foreground hover:bg-accent hover:text-accent-foreground before:absolute before:-left-3 before:top-2 before:bottom-2 before:w-[3px] before:rounded-r before:bg-primary';
+
 export function AppSidebar() {
   const location = useLocation();
-  const { addProject } = useAppStore();
-  const [version, setVersion] = useState('1.0.0');
+  const { addProject, settings, reports } = useAppStore();
+  const { theme, setTheme } = useTheme();
   const { checkForUpdate, UpdateDialog } = useUpdateDialog();
-
-  useEffect(() => {
-    if (isTauri) {
-      getVersion().then(setVersion);
-    }
-  }, []);
-
-  const routes = [
-    {
-      label: '仪表盘',
-      icon: Home,
-      href: '/',
-    },
-    {
-      label: '历史周报',
-      icon: History,
-      href: '/history',
-    },
-    {
-      label: '系统配置',
-      icon: Settings,
-      href: '/settings',
-    },
-  ];
+  const provider = getActiveProvider(settings);
+  const ThemeIcon = THEME_OPTIONS.find((o) => o.value === theme)?.icon ?? MonitorIcon;
 
   const handleAddProject = async () => {
     try {
       if (!isTauri) {
-        // Web 模式下的 Mock 行为
         const mockPath = `C:\\Mock\\Project\\${Math.floor(Math.random() * 1000)}`;
         addProject(mockPath);
-        toast({ title: "Mock项目已添加", description: mockPath });
+        toast({ title: 'Mock项目已添加', description: mockPath });
         return;
       }
-
-      const selected = await open({
-        directory: true,
-        multiple: false,
-      });
+      const selected = await open({ directory: true, multiple: false });
       if (selected && typeof selected === 'string') {
         addProject(selected);
-        toast({ title: "项目已添加", description: selected });
+        toast({ title: '项目已添加', description: selected });
       }
     } catch (err: any) {
       console.error(err);
-      toast({
-        title: "添加失败",
-        description: err.message || "无法添加项目",
-        variant: "destructive"
-      });
+      toast({ title: '添加失败', description: err.message || '无法添加项目', variant: 'destructive' });
     }
   };
 
-  const handleCheckUpdate = async () => {
+  const handleCheckUpdate = () => {
     if (!isTauri) {
-      toast({ title: "检查更新", description: "Web模式下不支持检查更新" });
+      toast({ title: '检查更新', description: 'Web模式下不支持检查更新' });
       return;
     }
     checkForUpdate();
   };
 
   return (
-    <Sidebar>
-      <SidebarHeader
-        onMouseDown={handleWindowDrag}
-        className={`${TITLEBAR_HEIGHT} shrink-0 flex items-center select-none cursor-default`}
-      >
-        <div className="flex items-center gap-2 px-2">
-          <FileText className="h-6 w-6 text-primary" />
-          <span className="font-bold text-lg">周报助手</span>
+    <aside className="w-[232px] shrink-0 flex flex-col bg-card border-r border-border px-3 py-3.5">
+      <div className="flex items-center gap-2.5 px-2 pb-4">
+        <img src="/logo.png" alt="周报助手" className="h-[30px] w-[30px] rounded-lg shadow-sm" draggable={false} />
+        <div className="leading-tight">
+          <div className="text-sm font-semibold">周报助手</div>
+          <div className="text-[11px] text-muted-foreground">Git Weekly Reporter</div>
         </div>
-      </SidebarHeader>
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>功能导航</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {routes.map((route) => (
-                <SidebarMenuItem key={route.href}>
-                  <SidebarMenuButton asChild isActive={location.pathname === route.href}>
-                    <Link to={route.href}>
-                      <route.icon />
-                      <span>{route.label}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+      </div>
 
-        <SidebarSeparator />
+      <div className="px-2.5 pt-2 pb-1.5 text-[11px] font-medium text-muted-foreground">工作台</div>
+      <nav className="flex flex-col gap-0.5">
+        {ROUTES.map((r) => (
+          <Link key={r.href} to={r.href} className={cn(navItem, location.pathname === r.href && navActive)}>
+            <r.icon size={17} />
+            <span>{r.label}</span>
+            {r.href === '/history' && reports.length > 0 && (
+              <span className="ml-auto rounded-full bg-muted px-1.5 text-[11px] font-medium text-muted-foreground">
+                {reports.length}
+              </span>
+            )}
+          </Link>
+        ))}
+      </nav>
 
-        <SidebarGroup>
-           <SidebarGroupLabel>快捷操作</SidebarGroupLabel>
-           <SidebarGroupContent>
-             <SidebarMenu>
-               <SidebarMenuItem>
-                <SidebarMenuButton onClick={handleAddProject}>
-                  <FolderPlus />
-                  <span>添加项目</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton onClick={handleCheckUpdate}>
-                  <RefreshCcw />
-                  <span>检查更新</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-             </SidebarMenu>
-           </SidebarGroupContent>
-        </SidebarGroup>
+      <div className="px-2.5 pt-4 pb-1.5 text-[11px] font-medium text-muted-foreground">快捷操作</div>
+      <nav className="flex flex-col gap-0.5">
+        <button onClick={handleAddProject} className={navItem}>
+          <PlusIcon size={17} />
+          <span>添加项目</span>
+        </button>
+        <button onClick={handleCheckUpdate} className={navItem}>
+          <ArrowsClockwiseIcon size={17} />
+          <span>检查更新</span>
+        </button>
+      </nav>
 
-      </SidebarContent>
-      <SidebarFooter>
-        <div className="p-4 text-xs text-muted-foreground text-center">
-          @江晚正愁余 V{version}
+      <div className="mt-auto flex items-center gap-2.5 border-t border-border pt-3 pl-1">
+        <div className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full bg-accent text-xs font-semibold text-accent-foreground">
+          {(settings.authorName || '我').slice(0, 1)}
         </div>
-      </SidebarFooter>
+        <div className="min-w-0 leading-tight">
+          <div className="truncate text-[13px] font-semibold">{settings.authorName || '未设置作者'}</div>
+          <div className="truncate text-[11px] text-muted-foreground">
+            {provider ? `${provider.name} · ${provider.model}` : '未配置模型'} · v{__APP_VERSION__}
+          </div>
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className="ml-auto grid h-[30px] w-[30px] shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              title="切换主题"
+            >
+              <ThemeIcon size={17} />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-[130px]">
+            {THEME_OPTIONS.map((o) => (
+              <DropdownMenuItem key={o.value} onClick={() => setTheme(o.value)} className="cursor-pointer gap-2">
+                <o.icon size={15} />
+                {o.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
       <UpdateDialog />
-    </Sidebar>
+    </aside>
   );
 }

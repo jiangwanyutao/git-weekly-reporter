@@ -17,6 +17,11 @@ module.exports = {
 		},
 		extend: {
 			colors: {
+				success: {
+					DEFAULT: 'hsl(var(--success))',
+					foreground: 'hsl(var(--success-foreground))'
+				},
+				warning: 'hsl(var(--warning))',
 				border: 'hsl(var(--border))',
 				input: 'hsl(var(--input))',
 				ring: 'hsl(var(--ring))',
@@ -57,16 +62,6 @@ module.exports = {
 					'4': 'hsl(var(--chart-4))',
 					'5': 'hsl(var(--chart-5))'
 				},
-				sidebar: {
-					DEFAULT: 'hsl(var(--sidebar-background))',
-					foreground: 'hsl(var(--sidebar-foreground))',
-					primary: 'hsl(var(--sidebar-primary))',
-					'primary-foreground': 'hsl(var(--sidebar-primary-foreground))',
-					accent: 'hsl(var(--sidebar-accent))',
-					'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
-					border: 'hsl(var(--sidebar-border))',
-					ring: 'hsl(var(--sidebar-ring))'
-				}
 			},
 			borderRadius: {
 				lg: 'var(--radius)',
@@ -74,9 +69,9 @@ module.exports = {
 				sm: 'calc(var(--radius) - 4px)'
 			},
 			fontFamily: {
-				sans: ['Montserrat', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-				serif: ['Playfair Display', 'ui-serif', 'Georgia', 'serif'],
-				mono: ['Source Code Pro', 'ui-monospace', 'monospace'],
+				sans: ['Inter', '-apple-system', 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei', 'Noto Sans SC', 'sans-serif'],
+				serif: ['ui-serif', 'Georgia', 'serif'],
+				mono: ['JetBrains Mono', 'Cascadia Code', 'Consolas', 'ui-monospace', 'monospace'],
 			},
 			keyframes: {
 				'accordion-down': {

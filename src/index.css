@@ -4,104 +4,82 @@
 
 @layer base {
   :root {
-    /* 清新的浅色背景 */
-    --background: 220 20% 97%;
-    --foreground: 222 47% 11%;
+    --background: 228 38% 97%;
+    --foreground: 229 21% 10%;
 
-    /* 干净的白色卡片 */
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card-foreground: 229 21% 10%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
+    --popover-foreground: 229 21% 10%;
 
-    /* 紫色主题 */
-    --primary: 250 89% 55%;
+    --primary: 246 89% 63%;
     --primary-foreground: 0 0% 100%;
 
-    /* 蓝色补充色 */
-    --secondary: 217 91% 50%;
-    --secondary-foreground: 0 0% 100%;
+    --secondary: 230 30% 96%;
+    --secondary-foreground: 229 14% 34%;
 
-    --muted: 220 15% 90%;
-    --muted-foreground: 222 20% 40%;
+    --muted: 230 30% 96%;
+    --muted-foreground: 229 12% 42%;
 
-    --accent: 250 60% 96%;
-    --accent-foreground: 250 89% 45%;
+    --accent: 247 90% 96%;
+    --accent-foreground: 246 72% 56%;
 
-    --destructive: 0 84% 60%;
+    --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 15% 88%;
-    --input: 220 15% 88%;
-    --ring: 250 89% 55%;
-    --radius: 0.5rem;
+    --success: 142 72% 36%;
+    --success-foreground: 0 0% 100%;
+    --warning: 32 95% 44%;
 
-    /* Charts - 协调的图表配色 */
-    --chart-1: 250 89% 55%;
+    --border: 228 23% 92%;
+    --input: 228 20% 86%;
+    --ring: 246 89% 63%;
+    --radius: 0.625rem;
+
+    --chart-1: 246 89% 63%;
     --chart-2: 217 91% 50%;
     --chart-3: 199 89% 48%;
     --chart-4: 172 66% 50%;
     --chart-5: 292 84% 55%;
-
-    /* Sidebar */
-    --sidebar-background: 220 20% 97%;
-    --sidebar-foreground: 222 47% 11%;
-    --sidebar-primary: 250 89% 55%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 250 60% 96%;
-    --sidebar-accent-foreground: 250 89% 45%;
-    --sidebar-border: 220 15% 88%;
-    --sidebar-ring: 250 89% 55%;
   }
 
   .dark {
-    /* 更深的蓝黑色背景，减少视觉疲劳 */
-    --background: 222 47% 11%;
-    --foreground: 210 40% 98%;
+    --background: 223 17% 8%;
+    --foreground: 223 26% 95%;
 
-    /* 带蓝调的卡片，增加层次感 */
-    --card: 217 33% 17%;
-    --card-foreground: 210 40% 98%;
-    --popover: 217 33% 17%;
-    --popover-foreground: 210 40% 98%;
+    --card: 222 17% 11%;
+    --card-foreground: 223 26% 95%;
+    --popover: 222 17% 11%;
+    --popover-foreground: 223 26% 95%;
 
-    /* 保持紫色主题 */
-    --primary: 250 89% 65%;
+    --primary: 246 100% 73%;
     --primary-foreground: 0 0% 100%;
 
-    /* 蓝色作为补充色 */
-    --secondary: 217 91% 60%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 222 17% 15%;
+    --secondary-foreground: 224 18% 78%;
 
-    --muted: 217 33% 25%;
-    --muted-foreground: 215 20% 65%;
+    --muted: 222 17% 15%;
+    --muted-foreground: 227 15% 65%;
 
-    --accent: 250 89% 55%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 245 36% 21%;
+    --accent-foreground: 246 100% 83%;
 
-    --destructive: 0 63% 55%;
+    --destructive: 0 91% 71%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 217 33% 25%;
-    --input: 217 33% 25%;
-    --ring: 250 89% 65%;
+    --success: 160 64% 52%;
+    --success-foreground: 0 0% 100%;
+    --warning: 43 96% 56%;
 
-    /* Charts - 更协调的图表配色 */
-    --chart-1: 250 89% 65%;
+    --border: 224 16% 18%;
+    --input: 224 16% 24%;
+    --ring: 246 100% 73%;
+
+    --chart-1: 246 100% 73%;
     --chart-2: 217 91% 60%;
     --chart-3: 199 89% 48%;
     --chart-4: 172 66% 50%;
     --chart-5: 292 84% 60%;
-
-    /* Sidebar - 玻璃拟态效果 */
-    --sidebar-background: 222 47% 11%;
-    --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 250 89% 65%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 217 91% 60%;
-    --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 217 33% 25%;
-    --sidebar-ring: 250 89% 65%;
   }
 }
 
@@ -111,95 +89,58 @@
   }
 
   body {
-    @apply bg-background text-foreground;
-    font-feature-settings: "rlig" 1, "calt" 1;
-    font-family: "Montserrat", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", Arial, sans-serif;
+    @apply bg-background text-foreground font-sans;
+    font-feature-settings: "tnum" 1, "cv11" 1, "calt" 1;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* 桌面端统一细滚动条 */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--input));
+    border-radius: 4px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.5);
+    background-clip: content-box;
   }
 }
 
-/* 增强效果 - 玻璃拟态 */
 @layer components {
-  .glass-card {
-    @apply backdrop-blur-xl bg-card/80 border border-border/50;
+  /* 页面标题下的一句上下文说明 */
+  .page-title {
+    @apply text-[22px] font-semibold tracking-tight leading-tight;
+  }
+  .page-subtitle {
+    @apply text-[13px] text-muted-foreground mt-1;
   }
 
-  .glass-sidebar {
-    @apply backdrop-blur-xl bg-sidebar-background/90;
+  /* 周报正文（仪表盘预览与历史详情共用） */
+  .report-md {
+    @apply prose prose-sm dark:prose-invert max-w-[760px];
   }
-
-  /* 渐变边框效果 */
-  .gradient-border {
-    position: relative;
+  .report-md h1 {
+    @apply text-[22px] font-bold tracking-tight mb-4;
   }
-
-  .gradient-border::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    padding: 1px;
-    background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--secondary)) 50%, hsl(var(--primary)) 100%);
-    -webkit-mask:
-      linear-gradient(#fff 0 0) content-box,
-      linear-gradient(#fff 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    pointer-events: none;
-    opacity: 0.5;
-    transition: opacity 0.3s ease;
+  .report-md h2 {
+    @apply text-[15px] font-semibold mt-5 mb-2 flex items-center gap-2 before:content-[''] before:w-[3px] before:h-3.5 before:rounded-sm before:bg-primary;
   }
-
-  .gradient-border:hover::before {
-    opacity: 1;
+  .report-md ol,
+  .report-md ul {
+    @apply text-muted-foreground;
   }
-
-  /* 发光按钮效果 */
-  .glow-button {
-    @apply relative overflow-hidden;
-    box-shadow: 0 0 20px -5px hsl(var(--primary) / 0.5);
-    transition: box-shadow 0.3s ease;
+  .report-md li {
+    @apply my-1.5 leading-relaxed;
   }
-
-  .glow-button:hover {
-    box-shadow: 0 0 30px -5px hsl(var(--primary) / 0.8);
-  }
-
-  /* 统计卡片悬停效果 */
-  .stat-card {
-    @apply transition-all duration-300 ease-out;
-  }
-
-  .stat-card:hover {
-    @apply -translate-y-0.5;
-    box-shadow: 0 8px 30px -10px hsl(var(--primary) / 0.3);
-  }
-
-  /* 提交记录项 */
-  .commit-item {
-    @apply transition-all duration-200;
-    border-left: 2px solid transparent;
-  }
-
-  .commit-item:hover {
-    border-left-color: hsl(var(--primary));
-    background: hsl(var(--accent) / 0.1);
-  }
-
-  /* 自定义滚动条 */
-  .custom-scrollbar::-webkit-scrollbar {
-    width: 6px;
-  }
-
-  .custom-scrollbar::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: hsl(var(--muted));
-    border-radius: 3px;
-  }
-
-  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: hsl(var(--muted-foreground));
+  .report-md li strong {
+    @apply text-foreground font-semibold;
   }
 }

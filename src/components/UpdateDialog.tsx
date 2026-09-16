@@ -14,7 +14,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { toast } from '@/hooks/use-toast';
-import { Download, RefreshCcw, CheckCircle2, XCircle } from 'lucide-react';
+import { DownloadSimpleIcon, ArrowsClockwiseIcon, CheckCircleIcon, XCircleIcon } from '@phosphor-icons/react';
 
 type UpdateStatus = 'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'error';
 
@@ -171,31 +171,31 @@ export function useUpdateDialog() {
           <DialogTitle className="flex items-center gap-2">
             {state.status === 'checking' && (
               <>
-                <RefreshCcw className="h-5 w-5 animate-spin" />
+                <ArrowsClockwiseIcon size={20} className="animate-spin" />
                 检查更新中...
               </>
             )}
             {state.status === 'available' && (
               <>
-                <Download className="h-5 w-5" />
+                <DownloadSimpleIcon size={20} />
                 发现新版本
               </>
             )}
             {state.status === 'downloading' && (
               <>
-                <Download className="h-5 w-5 animate-pulse" />
+                <DownloadSimpleIcon size={20} className="animate-pulse" />
                 正在下载更新
               </>
             )}
             {state.status === 'ready' && (
               <>
-                <CheckCircle2 className="h-5 w-5 text-green-500" />
+                <CheckCircleIcon size={20} weight="fill" className="text-success" />
                 更新已就绪
               </>
             )}
             {state.status === 'error' && (
               <>
-                <XCircle className="h-5 w-5 text-destructive" />
+                <XCircleIcon size={20} weight="fill" className="text-destructive" />
                 更新失败
               </>
             )}
@@ -239,14 +239,14 @@ export function useUpdateDialog() {
                 稍后再说
               </Button>
               <Button onClick={startDownload}>
-                <Download className="h-4 w-4 mr-2" />
+                <DownloadSimpleIcon size={16} />
                 立即更新
               </Button>
             </>
           )}
           {state.status === 'ready' && (
             <Button onClick={handleRelaunch}>
-              <RefreshCcw className="h-4 w-4 mr-2" />
+              <ArrowsClockwiseIcon size={16} />
               重启应用
             </Button>
           )}
