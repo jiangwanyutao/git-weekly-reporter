@@ -165,7 +165,9 @@ export function useUpdateDialog() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const UpdateDialogComponent = () => (
+  // 必须是元素而不是在钩子里定义的组件：组件函数每次渲染都是新的，React 会把整个弹窗卸载重建，
+  // 下载进度一更新，遮罩淡入和缩放动画就重放一次，Windows 上表现为屏幕一直闪
+  const updateDialog = (
     <Dialog open={open} onOpenChange={closeDialog}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
@@ -263,6 +265,6 @@ export function useUpdateDialog() {
 
   return {
     checkForUpdate,
-    UpdateDialog: UpdateDialogComponent,
+    updateDialog,
   };
 }

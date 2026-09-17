@@ -46,7 +46,7 @@ export function AppSidebar() {
   const location = useLocation();
   const { settings, reports } = useAppStore();
   const { theme, setTheme } = useTheme();
-  const { checkForUpdate, UpdateDialog } = useUpdateDialog();
+  const { checkForUpdate, updateDialog } = useUpdateDialog();
   const provider = getActiveProvider(settings);
   const ThemeIcon = THEME_OPTIONS.find((o) => o.value === theme)?.icon ?? MonitorIcon;
 
@@ -126,7 +126,7 @@ export function AppSidebar() {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      <UpdateDialog />
+      {updateDialog}
       {addProjectsDialog}
     </aside>
   );
