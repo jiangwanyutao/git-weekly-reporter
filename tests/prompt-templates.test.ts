@@ -130,3 +130,30 @@ test('升级：内置模板跟随代码更新', () => {
   const restored = resolvePromptTemplate({ promptTemplate: '旧内容', promptTemplateId: builtin.id });
   assert.equal(restored.promptTemplate, builtin.content);
 });
+
+test('提交少的一周：有专用内置模板，默认模板保持不变', () => {
+  const few = PROMPT_TEMPLATES.find((t) => t.id === 'few-commits');
+  assert.ok(few, '缺少 few-commits 模板');
+  assert.match(few.name, /提交少/);
+  assert.ok(hasCommitsVariable(few.content));
+  assert.equal(DEFAULT_TEMPLATE_ID, 'feature-merge');
+  assert.equal(PROMPT_TEMPLATES[0].id, 'feature-merge');
+});
+
+test('提交少的一周：模板不受「体量小」「其中 N 个体量够独立成条」标注影响，也没有压缩条目的规则', () => {
+  const few = PROMPT_TEMPLATES.find((t) => t.id === 'few-commits')!;
+  assert.match(few.content, /体量小/);
+  assert.match(few.content, /其中 N 个体量够独立成条/);
+  assert.match(few.content, /忽略/);
+  assert.doesNotMatch(few.content, /六成到十成/);
+  assert.doesNotMatch(few.content, /一律收进最后一条/);
+  assert.doesNotMatch(few.content, /按它标注的条目数写完/);
+});
+
+test('提交少的一周：模板可以被选中，重启后仍保持选中并跟随代码更新', () => {
+  const s = selectTemplate(base, 'few-commits');
+  assert.equal(s.promptTemplateId, 'few-commits');
+  const restored = resolvePromptTemplate({ ...s, promptTemplate: '旧内容' });
+  assert.equal(restored.promptTemplateId, 'few-commits');
+  assert.equal(restored.promptTemplate, PROMPT_TEMPLATES.find((t) => t.id === 'few-commits')!.content);
+});
