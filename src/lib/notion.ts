@@ -1,6 +1,7 @@
 import dayjs from 'dayjs';
 import { invoke } from '@tauri-apps/api/core';
 import { AppSettings, Report } from '@/types';
+import { activeProxy } from '@/lib/proxy';
 
 const RICH_TEXT_LIMIT = 1800;
 // Notion 单次请求最多 100 个 children，这里不再前端截断内容，
@@ -393,7 +394,7 @@ export async function syncReportToNotion(
       title: title.slice(0, 200),
       syncMode,
       children,
-      proxyUrl: settings.notionProxyUrl?.trim() || null,
+      proxyUrl: activeProxy(settings) ?? null,
     });
   } catch (error: any) {
     const message = String(error?.message || error || '');

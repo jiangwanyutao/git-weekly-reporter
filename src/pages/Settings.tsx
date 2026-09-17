@@ -1,19 +1,14 @@
-import { open } from '@tauri-apps/plugin-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import {
-  useAppStore,
-  DEFAULT_PROMPT,
-  DEFAULT_TEMPLATE_ID,
-  CUSTOM_TEMPLATE_ID,
-  PROMPT_TEMPLATES,
-} from '@/store';
+import { useAppStore, DEFAULT_PROMPT, DEFAULT_TEMPLATE_ID } from '@/store';
+import { PromptTemplatePicker } from '@/components/PromptTemplatePicker';
+import { useAddProjects } from '@/components/AddProjectsDialog';
 import { testModelConnection } from '@/lib/glm';
 import { getProjectBranches, getProjectAuthors } from '@/lib/git';
-import { cn, normalizeProxyUrl, projectDot } from '@/lib/utils';
+import { cn, projectDot } from '@/lib/utils';
+import { DEFAULT_PROXY_URL, activeProxy } from '@/lib/proxy';
 import {
   FolderIcon,
   CpuIcon,
@@ -37,7 +32,7 @@ import {
 import { useState, useEffect } from 'react';
 import { toast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { check } from '@tauri-apps/plugin-updater';
+import { findUpdate, installUpdate, type FoundUpdate } from '@/lib/updater';
 import { getVersion } from '@tauri-apps/api/app';
 import type { BranchMode, AuthorMode, Project, ModelProvider, ProviderProtocol } from '@/types';
 import {
@@ -85,7 +80,7 @@ function SettingsCard({ title, desc, action, children }: { title: string; desc: 
 // 表单行：左列 label + 说明，右列控件
 function Field({ label, hint, children }: { label: React.ReactNode; hint?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="grid grid-cols-[180px_1fr] items-start gap-4 border-b border-border py-3.5 first:pt-0 last:border-0 last:pb-0">
+    <div className="grid grid-cols-[180px_1fr] items-start gap-4 border-b border-border py-3.5 first:pt-0 last:border-0 last:pb-0 xl:grid-cols-[240px_1fr] xl:gap-6">
       <div>
         <div className="text-[13px] font-medium">{label}</div>
         {hint && <div className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{hint}</div>}
@@ -328,7 +323,7 @@ function ProjectAdvanced({
 }
 
 export default function SettingsPage() {
-  const { settings, updateSettings, projects, addProject, removeProject, updateProject } = useAppStore();
+  const { settings, updateSettings, projects, removeProject, updateProject } = useAppStore();
   const [section, setSection] = useState<Section>('projects');
   const [localSettings, setLocalSettings] = useState(settings);
   const [isAliasDialogOpen, setIsAliasDialogOpen] = useState(false);
@@ -337,7 +332,7 @@ export default function SettingsPage() {
   const [fetchProjectId, setFetchProjectId] = useState<string | null>(null);
 
   const [version, setVersion] = useState('');
-  const [updateAvailable, setUpdateAvailable] = useState<any>(null);
+  const [updateAvailable, setUpdateAvailable] = useState<FoundUpdate | null>(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
@@ -391,11 +386,11 @@ export default function SettingsPage() {
     }
     setCheckingUpdate(true);
     try {
-      const proxy = normalizeProxyUrl(localSettings.updaterProxyUrl);
-      const update = await check(proxy ? { proxy } : undefined);
-      if (update) {
-        setUpdateAvailable(update);
-        toast({ title: '发现新版本', description: `v${update.version} 可用` });
+      // 检测与下载机制和侧栏「检查更新」共用 lib/updater，只是这里用页面上尚未保存的代理设置，方便先试再存
+      const found = await findUpdate(localSettings);
+      if (found) {
+        setUpdateAvailable(found);
+        toast({ title: '发现新版本', description: `v${found.update.version} 可用` });
       } else {
         toast({ title: '已是最新版本', description: '当前没有发现新更新' });
       }
@@ -411,7 +406,7 @@ export default function SettingsPage() {
     if (!updateAvailable) return;
     setUpdating(true);
     try {
-      await updateAvailable.downloadAndInstall();
+      await installUpdate(localSettings, updateAvailable);
       toast({ title: '更新完成', description: '请重启应用以生效' });
     } catch (error: any) {
       console.error(error);
@@ -438,31 +433,10 @@ export default function SettingsPage() {
     }
   };
 
-  const handleAddProject = async () => {
-    try {
-      if (!isTauri) {
-        // Web 模式下的 Mock 行为
-        const mockPath = `C:\\Mock\\Project\\${Math.floor(Math.random() * 1000)}`;
-        addProject(mockPath);
-        toast({ title: 'Mock项目已添加', description: mockPath });
-        return;
-      }
-
-      const selected = await open({ directory: true, multiple: false });
-      if (selected && typeof selected === 'string') {
-        addProject(selected);
-        toast({ title: '项目已添加', description: selected });
-        // zustand 更新是同步的，直接从 store 取新项目触发别名编辑
-        const newProject = useAppStore.getState().projects.find((p) => p.path === selected);
-        if (newProject) {
-          openAliasDialog(newProject.id, newProject.alias || newProject.name);
-        }
-      }
-    } catch (err: any) {
-      console.error(err);
-      toast({ title: '添加失败', description: err.message || '无法添加项目', variant: 'destructive' });
-    }
-  };
+  // 只添加了一个项目时顺手弹出改别名；批量导入不弹
+  const { addProjects, scanning, addProjectsDialog } = useAddProjects({
+    onSingleAdded: (project) => openAliasDialog(project.id, project.alias || project.name),
+  });
 
   const openAliasDialog = (id: string, currentName: string) => {
     setEditingProjectId(id);
@@ -480,7 +454,6 @@ export default function SettingsPage() {
   };
 
   const fetchProject = projects.find((p) => p.id === fetchProjectId);
-  const currentTemplate = PROMPT_TEMPLATES.find((t) => t.id === localSettings.promptTemplateId);
 
   return (
     <div className="flex h-full flex-col gap-4 overflow-hidden px-6 py-5">
@@ -489,7 +462,7 @@ export default function SettingsPage() {
         <p className="page-subtitle">项目、模型、同步与提示词，改动会即时标记为未保存</p>
       </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-[200px_1fr] gap-5">
+      <div className="grid min-h-0 flex-1 grid-cols-[200px_1fr] gap-5 2xl:grid-cols-[240px_1fr] 2xl:gap-6">
         {/* 左侧二级导航 */}
         <nav className="flex flex-col gap-0.5">
           {SECTIONS.map((s) => (
@@ -508,16 +481,16 @@ export default function SettingsPage() {
         </nav>
 
         {/* 右侧内容 */}
-        <div className="flex min-w-0 max-w-[880px] flex-col gap-4 overflow-auto pr-1">
+        <div className="flex min-w-0 flex-col gap-4 overflow-auto pr-1">
           {section === 'projects' && (
             <>
               <SettingsCard
                 title="Git 项目"
                 desc="添加、删除、别名与抓取范围即时生效，无需保存"
                 action={
-                  <Button variant="outline" size="sm" onClick={handleAddProject}>
-                    <PlusIcon size={14} />
-                    添加项目
+                  <Button variant="outline" size="sm" onClick={addProjects} disabled={scanning}>
+                    {scanning ? <SpinnerIcon size={14} className="animate-spin" /> : <PlusIcon size={14} />}
+                    {scanning ? '扫描中…' : '添加项目'}
                   </Button>
                 }
               >
@@ -666,12 +639,15 @@ export default function SettingsPage() {
                   placeholder="https://www.notion.so/xxx"
                 />
               </Field>
-              <Field label="代理地址（可选）" hint="如果网络无法直连 Notion，可填写本机代理地址，留空则直连">
-                <Input
-                  value={localSettings.notionProxyUrl}
-                  onChange={(e) => setLocalSettings({ ...localSettings, notionProxyUrl: e.target.value })}
-                  placeholder="例如 Clash verge: http://127.0.0.1:7897"
-                />
+              <Field label="网络代理" hint="与检查更新共用同一个代理开关，连不上 Notion 时打开">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="truncate text-[13px] text-muted-foreground">
+                    {activeProxy(localSettings) ? `已开启：${activeProxy(localSettings)}` : '未开启，按系统网络设置连接'}
+                  </span>
+                  <Button variant="outline" size="sm" onClick={() => setSection('about')}>
+                    去设置
+                  </Button>
+                </div>
               </Field>
             </SettingsCard>
           )}
@@ -679,7 +655,7 @@ export default function SettingsPage() {
           {section === 'prompt' && (
             <SettingsCard
               title="提示词模板"
-              desc="内置模板随版本更新；自行修改后将标记为自定义，不再被覆盖"
+              desc="内置模板随版本更新；也可以新建自己的模板，命名后随时切换"
               action={
                 <Button
                   variant="ghost"
@@ -694,59 +670,19 @@ export default function SettingsPage() {
                 </Button>
               }
             >
-              <div className="grid grid-cols-2 gap-2">
-                {PROMPT_TEMPLATES.map((t) => {
-                  const on = t.id === localSettings.promptTemplateId;
-                  return (
-                    <button
-                      key={t.id}
-                      type="button"
-                      onClick={() => {
-                        setLocalSettings({ ...localSettings, promptTemplate: t.content, promptTemplateId: t.id });
-                        toast({ title: `已切换到「${t.name}」`, description: '记得点击「保存配置」后生效' });
-                      }}
-                      className={cn(
-                        'flex items-start gap-2.5 rounded-[7px] border px-3 py-2.5 text-left transition-colors',
-                        on ? 'border-primary bg-accent' : 'border-border hover:bg-muted/60'
-                      )}
-                    >
-                      <span className={cn('mt-0.5 h-4 w-4 shrink-0 rounded-full border-[1.5px]', on ? 'border-[5px] border-primary' : 'border-input')} />
-                      <span className="min-w-0">
-                        <span className="block text-[13px] font-semibold">{t.name}</span>
-                        <span className="text-xs text-muted-foreground">{t.description}</span>
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-              {!currentTemplate && <p className="mt-2 text-xs text-muted-foreground">当前是自定义提示词，升级时不会被覆盖。</p>}
-              <Textarea
-                className="mt-3 h-[220px] resize-none font-mono text-xs"
-                value={localSettings.promptTemplate}
-                onChange={(e) =>
-                  setLocalSettings({
-                    ...localSettings,
-                    promptTemplate: e.target.value,
-                    // 手动改过就标为自定义，之后升级不再覆盖
-                    promptTemplateId: CUSTOM_TEMPLATE_ID,
-                  })
-                }
-              />
-              <p className="mt-1.5 text-xs text-muted-foreground">
-                可用变量 <code className="font-mono">{'{{commits}}'}</code>，将替换为归组后的 Git 提交记录。生成效果不满意时，可切换到别的模板重新生成。
-              </p>
+              <PromptTemplatePicker settings={localSettings} onChange={setLocalSettings} />
             </SettingsCard>
           )}
 
           {section === 'about' && (
             <>
-              <SettingsCard title="关于 AI 周报助手" desc="客户端会从 GitHub Release 检测最新版本">
+              <SettingsCard title="关于 AI周报" desc="客户端会从 GitHub Release 检测最新版本">
                 <Field label="当前版本" hint={`v${version || '1.0.0'}`}>
                   <div className="flex justify-end">
                     {updateAvailable ? (
                       <Button size="sm" onClick={handleUpdate} disabled={updating}>
                         {updating ? <SpinnerIcon size={14} className="animate-spin" /> : <DownloadSimpleIcon size={14} />}
-                        {updating ? '更新中...' : `更新到 v${updateAvailable.version}`}
+                        {updating ? '更新中...' : `更新到 v${updateAvailable.update.version}`}
                       </Button>
                     ) : (
                       <Button variant="outline" size="sm" onClick={handleCheckUpdate} disabled={checkingUpdate}>
@@ -756,18 +692,30 @@ export default function SettingsPage() {
                     )}
                   </div>
                 </Field>
-                <Field
-                  label="更新代理地址（可选）"
-                  hint={
-                    <>
-                      检查/下载更新通过 GitHub，更新组件<span className="text-foreground">不会自动走系统代理</span>。若直连失败，填写本机代理地址即可，留空则直连
-                    </>
-                  }
-                >
+              </SettingsCard>
+              <SettingsCard
+                title="网络代理"
+                desc="Notion 同步与检查更新共用。关闭时不单独指定代理，按系统网络设置连接；检查更新或下载失败时，会自动换另一条线路再试一次"
+              >
+                <Field label="启用代理" hint="开启后 Notion 同步与检查更新优先走下方地址">
+                  <Switch
+                    checked={localSettings.proxyEnabled}
+                    onCheckedChange={(checked) =>
+                      setLocalSettings((prev) => ({
+                        ...prev,
+                        proxyEnabled: checked,
+                        // 打开时地址为空就填默认地址，关闭时保留已填地址
+                        proxyUrl: checked && !prev.proxyUrl.trim() ? DEFAULT_PROXY_URL : prev.proxyUrl,
+                      }))
+                    }
+                  />
+                </Field>
+                <Field label="代理地址" hint={`Clash Verge 默认 ${DEFAULT_PROXY_URL}`}>
                   <Input
-                    value={localSettings.updaterProxyUrl}
-                    onChange={(e) => setLocalSettings((prev) => ({ ...prev, updaterProxyUrl: e.target.value }))}
-                    placeholder="例如 Clash: http://127.0.0.1:7897"
+                    value={localSettings.proxyUrl}
+                    disabled={!localSettings.proxyEnabled}
+                    onChange={(e) => setLocalSettings((prev) => ({ ...prev, proxyUrl: e.target.value }))}
+                    placeholder={DEFAULT_PROXY_URL}
                   />
                 </Field>
               </SettingsCard>
@@ -798,6 +746,7 @@ export default function SettingsPage() {
         </div>
       </div>
 
+      {addProjectsDialog}
       <Dialog open={isAliasDialogOpen} onOpenChange={setIsAliasDialogOpen}>
         <DialogContent>
           <DialogHeader>

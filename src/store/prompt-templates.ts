@@ -362,3 +362,110 @@ export function isLegacyPrompt(content: string): boolean {
   const c = normalize(content);
   return LEGACY_PROMPTS.some((p) => normalize(p) === c);
 }
+
+// ---------------------------------------------------------------------------
+// 用户自建模板。内置模板只读、随版本更新；自建模板 id 以 user- 开头，随设置持久化。
+// 下面的函数都返回新对象，不修改入参。
+// ---------------------------------------------------------------------------
+
+export const USER_TEMPLATE_PREFIX = 'user-';
+
+export interface PromptSettings {
+  promptTemplate: string;
+  promptTemplateId?: string;
+  customTemplates?: PromptTemplate[];
+}
+
+export function isUserTemplateId(id: string | undefined): boolean {
+  return Boolean(id?.startsWith(USER_TEMPLATE_PREFIX));
+}
+
+export function findAnyTemplate(id: string | undefined, userTemplates: PromptTemplate[] = []): PromptTemplate | undefined {
+  return findTemplateById(id) ?? userTemplates.find((t) => t.id === id);
+}
+
+// 返回错误文案；合法返回 null。重命名时传 selfId，避免和自己比出重名
+export function validateTemplateName(name: string, userTemplates: PromptTemplate[] = [], selfId?: string): string | null {
+  const n = name.trim();
+  if (!n) return '请填写模板名称';
+  const taken = [...PROMPT_TEMPLATES, ...userTemplates].some((t) => t.id !== selfId && t.name.trim() === n);
+  return taken ? '已有同名模板，换个名称吧' : null;
+}
+
+export function hasCommitsVariable(content: string): boolean {
+  return content.includes('{{commits}}');
+}
+
+export function selectTemplate<T extends PromptSettings>(s: T, id: string): T {
+  const tpl = findAnyTemplate(id, s.customTemplates);
+  return tpl ? { ...s, promptTemplateId: tpl.id, promptTemplate: tpl.content } : s;
+}
+
+export function addUserTemplate<T extends PromptSettings>(
+  s: T,
+  input: { name: string; description: string; content: string }
+): T & { customTemplates: PromptTemplate[] } {
+  const tpl: PromptTemplate = {
+    id: `${USER_TEMPLATE_PREFIX}${crypto.randomUUID()}`,
+    name: input.name.trim(),
+    description: input.description.trim(),
+    content: input.content,
+  };
+  return { ...s, customTemplates: [...(s.customTemplates ?? []), tpl], promptTemplateId: tpl.id, promptTemplate: tpl.content };
+}
+
+export function updateUserTemplate<T extends PromptSettings>(
+  s: T,
+  id: string,
+  patch: Partial<Pick<PromptTemplate, 'name' | 'description' | 'content'>>
+): T & { customTemplates: PromptTemplate[] } {
+  const clean = {
+    ...patch,
+    ...(patch.name !== undefined && { name: patch.name.trim() }),
+    ...(patch.description !== undefined && { description: patch.description.trim() }),
+  };
+  const customTemplates = (s.customTemplates ?? []).map((t) => (t.id === id ? { ...t, ...clean } : t));
+  const selected = s.promptTemplateId === id && patch.content !== undefined;
+  return { ...s, customTemplates, ...(selected && { promptTemplate: patch.content }) };
+}
+
+export function removeUserTemplate<T extends PromptSettings>(s: T, id: string): T & { customTemplates: PromptTemplate[] } {
+  const customTemplates = (s.customTemplates ?? []).filter((t) => t.id !== id);
+  const wasSelected = s.promptTemplateId === id;
+  return {
+    ...s,
+    customTemplates,
+    ...(wasSelected && { promptTemplateId: DEFAULT_TEMPLATE_ID, promptTemplate: DEFAULT_PROMPT }),
+  };
+}
+
+// 文本框编辑：选中自建模板就直接改它；否则标记为「自定义」，升级时不再覆盖
+export function editPromptContent<T extends PromptSettings>(s: T, content: string): T {
+  if (isUserTemplateId(s.promptTemplateId) && findAnyTemplate(s.promptTemplateId, s.customTemplates)) {
+    return updateUserTemplate(s, s.promptTemplateId!, { content });
+  }
+  return { ...s, promptTemplate: content, promptTemplateId: CUSTOM_TEMPLATE_ID };
+}
+
+// 读取持久化数据时确定当前该用哪个提示词。用的是内置模板就跟随代码更新（否则持久化会把旧
+// 提示词永久固定住，改模板对老用户完全无效）；自建模板取其最新内容；用户改过的「自定义」原样保留。
+export function resolvePromptTemplate(raw: any): any {
+  const content = typeof raw?.promptTemplate === 'string' ? raw.promptTemplate : '';
+  let id: string | undefined = raw?.promptTemplateId;
+
+  if (!id) {
+    // 老数据没存 id：内容只要是任一内置模板或开发期的中间版本，就说明用户
+    // 从没自己改过，升级到最新默认。注意不能反查成那个旧模板的 id——那会把
+    // 老用户永久钉死在最早的模板上，再也拿不到新默认。
+    // 主动选过模板的人存了 id，走下面的分支，不受这里影响。
+    const untouched = !content || isLegacyPrompt(content) || !!findTemplateByContent(content);
+    id = untouched ? DEFAULT_TEMPLATE_ID : CUSTOM_TEMPLATE_ID;
+  }
+
+  if (id === CUSTOM_TEMPLATE_ID) {
+    return { ...raw, promptTemplateId: CUSTOM_TEMPLATE_ID };
+  }
+
+  const template = findAnyTemplate(id, raw?.customTemplates) ?? findTemplateById(DEFAULT_TEMPLATE_ID)!;
+  return { ...raw, promptTemplateId: template.id, promptTemplate: template.content };
+}

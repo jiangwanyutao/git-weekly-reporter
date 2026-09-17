@@ -11,10 +11,10 @@ import {
 } from '@phosphor-icons/react';
 import { useAppStore } from '@/store';
 import { getActiveProvider } from '@/lib/glm';
-import { open } from '@tauri-apps/plugin-dialog';
 import { toast } from '@/hooks/use-toast';
 import { useTheme, type Theme } from '@/hooks/use-theme';
 import { useUpdateDialog } from '@/components/UpdateDialog';
+import { useAddProjects } from '@/components/AddProjectsDialog';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
@@ -44,30 +44,13 @@ const navActive =
 
 export function AppSidebar() {
   const location = useLocation();
-  const { addProject, settings, reports } = useAppStore();
+  const { settings, reports } = useAppStore();
   const { theme, setTheme } = useTheme();
   const { checkForUpdate, UpdateDialog } = useUpdateDialog();
   const provider = getActiveProvider(settings);
   const ThemeIcon = THEME_OPTIONS.find((o) => o.value === theme)?.icon ?? MonitorIcon;
 
-  const handleAddProject = async () => {
-    try {
-      if (!isTauri) {
-        const mockPath = `C:\\Mock\\Project\\${Math.floor(Math.random() * 1000)}`;
-        addProject(mockPath);
-        toast({ title: 'Mock项目已添加', description: mockPath });
-        return;
-      }
-      const selected = await open({ directory: true, multiple: false });
-      if (selected && typeof selected === 'string') {
-        addProject(selected);
-        toast({ title: '项目已添加', description: selected });
-      }
-    } catch (err: any) {
-      console.error(err);
-      toast({ title: '添加失败', description: err.message || '无法添加项目', variant: 'destructive' });
-    }
-  };
+  const { addProjects, scanning, addProjectsDialog } = useAddProjects();
 
   const handleCheckUpdate = () => {
     if (!isTauri) {
@@ -80,9 +63,9 @@ export function AppSidebar() {
   return (
     <aside className="w-[232px] shrink-0 flex flex-col bg-card border-r border-border px-3 py-3.5">
       <div className="flex items-center gap-2.5 px-2 pb-4">
-        <img src="/logo.png" alt="周报助手" className="h-[30px] w-[30px] rounded-lg shadow-sm" draggable={false} />
+        <img src="/logo.png" alt="AI周报" className="h-[30px] w-[30px] rounded-lg shadow-sm" draggable={false} />
         <div className="leading-tight">
-          <div className="text-sm font-semibold">周报助手</div>
+          <div className="text-sm font-semibold">AI周报</div>
           <div className="text-[11px] text-muted-foreground">Git Weekly Reporter</div>
         </div>
       </div>
@@ -104,7 +87,7 @@ export function AppSidebar() {
 
       <div className="px-2.5 pt-4 pb-1.5 text-[11px] font-medium text-muted-foreground">快捷操作</div>
       <nav className="flex flex-col gap-0.5">
-        <button onClick={handleAddProject} className={navItem}>
+        <button onClick={addProjects} disabled={scanning} className={cn(navItem, scanning && 'opacity-60')}>
           <PlusIcon size={17} />
           <span>添加项目</span>
         </button>
@@ -144,6 +127,7 @@ export function AppSidebar() {
         </DropdownMenu>
       </div>
       <UpdateDialog />
+      {addProjectsDialog}
     </aside>
   );
 }

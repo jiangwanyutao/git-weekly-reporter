@@ -455,8 +455,9 @@ export default function Dashboard() {
                 {label}
               </button>
             ))}
-            <span className={cn('h-full rounded-[5px]', rangeKey === 'custom' && 'bg-card shadow-sm')}>
-              <DatePickerWithRange date={dateRange} setDate={setDateRange} className="[&_button]:w-auto [&_button]:h-full [&_button]:border-0 [&_button]:bg-transparent [&_button]:shadow-none [&_button]:text-[13px]" />
+            {/* 日期按钮自带 h-9 和 py-2，内容最小高度 36px 会撑破 30px 的分段；外层逐级撑满并去掉上下内边距才能对齐 */}
+            <span className={cn('flex h-full rounded-[5px]', rangeKey === 'custom' && 'bg-card shadow-sm')}>
+              <DatePickerWithRange date={dateRange} setDate={setDateRange} className="h-full [&_button]:h-full [&_button]:w-auto [&_button]:border-0 [&_button]:bg-transparent [&_button]:px-3 [&_button]:py-0 [&_button]:text-[13px] [&_button]:shadow-none" />
             </span>
           </div>
           <Select

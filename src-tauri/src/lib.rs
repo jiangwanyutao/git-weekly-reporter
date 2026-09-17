@@ -1,6 +1,7 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 use serde::Serialize;
 use serde_json::{json, Value};
+use std::path::{Path, PathBuf};
 use tauri::Manager;
 
 #[tauri::command]
@@ -167,6 +168,94 @@ async fn create_notion_page(
     })
 }
 
+fn is_git_repo(dir: &Path) -> bool {
+    // 普通仓库的 .git 是目录；子模块、worktree 的 .git 是文件，两种都算
+    dir.join(".git").exists()
+}
+
+// 找出可导入的 Git 仓库：所选文件夹本身是仓库就只返回它；
+// 否则只看下一层子文件夹，跳过隐藏目录和 node_modules。结果按路径排序。
+fn find_git_repos(root: &Path) -> std::io::Result<Vec<PathBuf>> {
+    if is_git_repo(root) {
+        return Ok(vec![root.to_path_buf()]);
+    }
+    let mut repos: Vec<PathBuf> = std::fs::read_dir(root)?
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| entry.file_type().map(|t| t.is_dir()).unwrap_or(false))
+        .filter(|entry| {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            !name.starts_with('.') && name != "node_modules"
+        })
+        .map(|entry| entry.path())
+        .filter(|path| is_git_repo(path))
+        .collect();
+    repos.sort();
+    Ok(repos)
+}
+
+#[tauri::command]
+fn scan_git_repos(path: String) -> Result<Vec<String>, String> {
+    let repos = find_git_repos(Path::new(&path)).map_err(|error| format!("读取文件夹失败: {}", error))?;
+    Ok(repos.into_iter().map(|p| p.to_string_lossy().into_owned()).collect())
+}
+
+#[cfg(test)]
+mod scan_tests {
+    use super::find_git_repos;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+
+    // 每个用例一个独立临时目录，结束后删除
+    fn temp_root(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("gwr-scan-{}-{}", name, std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn make_repo(dir: &Path) {
+        fs::create_dir_all(dir.join(".git")).unwrap();
+    }
+
+    #[test]
+    fn selected_folder_is_repo_returns_only_itself() {
+        let root = temp_root("self");
+        make_repo(&root);
+        make_repo(&root.join("nested"));
+        assert_eq!(find_git_repos(&root).unwrap(), vec![root.clone()]);
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn finds_repos_one_level_down_sorted_skipping_hidden_and_node_modules() {
+        let root = temp_root("children");
+        make_repo(&root.join("b-app"));
+        make_repo(&root.join("a-api"));
+        fs::create_dir_all(root.join("docs")).unwrap();
+        make_repo(&root.join(".cache"));
+        make_repo(&root.join("node_modules"));
+        make_repo(&root.join("docs").join("deep-repo"));
+        // 子模块或 worktree 的 .git 是文件而不是目录，也算仓库
+        fs::create_dir_all(root.join("c-worktree")).unwrap();
+        fs::write(root.join("c-worktree").join(".git"), "gitdir: ../elsewhere").unwrap();
+
+        assert_eq!(
+            find_git_repos(&root).unwrap(),
+            vec![root.join("a-api"), root.join("b-app"), root.join("c-worktree")]
+        );
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn folder_without_repos_returns_empty() {
+        let root = temp_root("empty");
+        fs::create_dir_all(root.join("notes")).unwrap();
+        assert!(find_git_repos(&root).unwrap().is_empty());
+        fs::remove_dir_all(&root).unwrap();
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -184,7 +273,7 @@ pub fn run() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![greet, create_notion_page])
+        .invoke_handler(tauri::generate_handler![greet, create_notion_page, scan_git_repos])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

@@ -1,8 +1,7 @@
 import { useState, useRef } from 'react';
-import { check, Update } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { useAppStore } from '@/store';
-import { normalizeProxyUrl } from '@/lib/utils';
+import { findUpdate, installUpdate, type FoundUpdate } from '@/lib/updater';
 import {
   Dialog,
   DialogContent,
@@ -20,7 +19,7 @@ type UpdateStatus = 'idle' | 'checking' | 'available' | 'downloading' | 'ready' 
 
 interface UpdateState {
   status: UpdateStatus;
-  update: Update | null;
+  found: FoundUpdate | null;
   progress: number;
   downloadedSize: number;
   totalSize: number;
@@ -31,7 +30,7 @@ export function useUpdateDialog() {
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<UpdateState>({
     status: 'idle',
-    update: null,
+    found: null,
     progress: 0,
     downloadedSize: 0,
     totalSize: 0,
@@ -43,10 +42,9 @@ export function useUpdateDialog() {
     setState(prev => ({ ...prev, status: 'checking', error: null }));
 
     try {
-      const proxy = normalizeProxyUrl(useAppStore.getState().settings.updaterProxyUrl);
-      const update = await check(proxy ? { proxy } : undefined);
-      if (update) {
-        setState(prev => ({ ...prev, status: 'available', update }));
+      const found = await findUpdate(useAppStore.getState().settings);
+      if (found) {
+        setState(prev => ({ ...prev, status: 'available', found }));
       } else {
         setState(prev => ({ ...prev, status: 'idle' }));
         toast({ title: '检查更新', description: '当前已是最新版本' });
@@ -71,7 +69,7 @@ export function useUpdateDialog() {
   });
 
   const startDownload = async () => {
-    if (!state.update) return;
+    if (!state.found) return;
 
     setState(prev => ({ ...prev, status: 'downloading', progress: 0 }));
 
@@ -84,10 +82,13 @@ export function useUpdateDialog() {
     };
 
     try {
-      await state.update.downloadAndInstall((event) => {
+      await installUpdate(useAppStore.getState().settings, state.found, (event) => {
         switch (event.event) {
           case 'Started':
+            // 换线路重试时会重新开始下载，进度清零
             progressRef.current.total = event.data.contentLength || 0;
+            progressRef.current.downloaded = 0;
+            progressRef.current.lastUpdateProgress = 0;
             setState(prev => ({
               ...prev,
               totalSize: progressRef.current.total
@@ -147,7 +148,7 @@ export function useUpdateDialog() {
       setOpen(false);
       setState({
         status: 'idle',
-        update: null,
+        found: null,
         progress: 0,
         downloadedSize: 0,
         totalSize: 0,
@@ -202,14 +203,14 @@ export function useUpdateDialog() {
           </DialogTitle>
           <DialogDescription>
             {state.status === 'checking' && '正在检查是否有新版本...'}
-            {state.status === 'available' && state.update && (
+            {state.status === 'available' && state.found && (
               <div className="space-y-2 mt-2">
-                <p><strong>版本:</strong> {state.update.version}</p>
-                {state.update.body && (
+                <p><strong>版本:</strong> {state.found.update.version}</p>
+                {state.found.update.body && (
                   <div>
                     <strong>更新内容:</strong>
                     <p className="mt-1 text-sm whitespace-pre-wrap max-h-32 overflow-y-auto">
-                      {state.update.body}
+                      {state.found.update.body}
                     </p>
                   </div>
                 )}
