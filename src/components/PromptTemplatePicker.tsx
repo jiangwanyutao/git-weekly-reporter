@@ -28,8 +28,6 @@ type Props = {
 
 type Draft = { mode: 'create' | 'edit'; id?: string; name: string; description: string; content: string };
 
-const SAVE_HINT = '记得点击「保存配置」后生效';
-
 export function PromptTemplatePicker({ settings, onChange }: Props) {
   const userTemplates = settings.customTemplates ?? [];
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -53,10 +51,10 @@ export function PromptTemplatePicker({ settings, onChange }: Props) {
     }
     if (draft.mode === 'create') {
       onChange((prev) => addUserTemplate(prev, draft));
-      toast({ title: `已新建模板「${draft.name.trim()}」`, description: `已切换到该模板，${SAVE_HINT}` });
+      // 底部「有未保存的更改」保存条已经提示要保存，这里只报结果
+      toast({ title: `已新建并切换到「${draft.name.trim()}」` });
     } else {
       onChange((prev) => updateUserTemplate(prev, draft.id!, { name: draft.name, description: draft.description }));
-      toast({ title: '模板信息已更新', description: SAVE_HINT });
     }
     setDraft(null);
   };
@@ -65,12 +63,11 @@ export function PromptTemplatePicker({ settings, onChange }: Props) {
     if (!window.confirm(`确定删除模板「${t.name}」？删除后无法恢复。`)) return;
     const wasSelected = settings.promptTemplateId === t.id;
     onChange((prev) => removeUserTemplate(prev, t.id));
-    toast({ title: `已删除模板「${t.name}」`, description: wasSelected ? `已切回默认模板，${SAVE_HINT}` : SAVE_HINT });
+    toast({ title: `已删除模板「${t.name}」`, description: wasSelected ? '已切回默认模板' : undefined });
   };
 
   const choose = (t: PromptTemplate) => {
     onChange((prev) => selectTemplate(prev, t.id));
-    toast({ title: `已切换到「${t.name}」`, description: SAVE_HINT });
   };
 
   const renderCard = (t: PromptTemplate, isUser: boolean) => {

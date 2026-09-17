@@ -14,7 +14,8 @@ const ToastViewport = React.forwardRef<
   <ToastPrimitives.Viewport
     ref={ref}
     className={cn(
-      "fixed bottom-0 right-0 z-[100] flex max-h-screen w-full flex-col p-4 md:max-w-[420px]",
+      // 设置页底部保存条出现时（<html data-savebar>）整体上移，避免挡住「保存配置」按钮
+      "fixed bottom-0 right-0 z-[100] flex max-h-screen w-full flex-col p-4 md:max-w-[420px] [[data-savebar]_&]:bottom-16",
       className
     )}
     {...props}

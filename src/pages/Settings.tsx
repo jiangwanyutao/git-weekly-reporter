@@ -344,6 +344,12 @@ export default function SettingsPage() {
 
   const isDirty = JSON.stringify(localSettings) !== JSON.stringify(settings);
 
+  // 保存条显示期间给 <html> 打标记，右下角提示框据此抬到保存条上方（见 ui/toast.tsx），离开页面时清掉
+  useEffect(() => {
+    document.documentElement.toggleAttribute('data-savebar', isDirty);
+    return () => document.documentElement.removeAttribute('data-savebar');
+  }, [isDirty]);
+
   // ---- 模型提供商管理（作用于 localSettings，点保存后落库）----
   const updateProvider = (id: string, patch: Partial<ModelProvider>) =>
     setLocalSettings((prev) => ({
@@ -662,7 +668,6 @@ export default function SettingsPage() {
                   size="sm"
                   onClick={() => {
                     setLocalSettings({ ...localSettings, promptTemplate: DEFAULT_PROMPT, promptTemplateId: DEFAULT_TEMPLATE_ID });
-                    toast({ title: '已恢复默认提示词', description: '记得点击「保存配置」后生效' });
                   }}
                 >
                   <ArrowsClockwiseIcon size={14} />
