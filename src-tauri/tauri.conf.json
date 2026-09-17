@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "AI周报助手",
+        "title": "AI周报",
         "width": 1200,
         "height": 700,
         "decorations": false,
@@ -37,6 +37,9 @@
   },
   "bundle": {
     "active": true,
+    "macOS": {
+      "bundleName": "AI周报"
+    },
     "createUpdaterArtifacts": "v1Compatible",
     "targets": "all",
     "icon": [
@@ -48,6 +51,7 @@
     ],
     "windows": {
       "nsis": {
+        "template": "windows/installer.nsi",
         "installMode": "currentUser",
         "languages": [
           "SimpChinese",
