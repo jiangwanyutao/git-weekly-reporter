@@ -1,17 +1,17 @@
-import { CommitLog } from '@/types';
+import type { CommitLog } from '@/types';
 
-// 送进模型的上限，防止超长 prompt 触发模型退化（无限生成的主因之一）
+// 送进模型的上限，防止超长 prompt 触发模型退化（无限生成的主因之一）。
+// 不设单组上限：没写模块的提交（feat: xxx）全部落在同一组，单组一截就丢掉大半周的工作。
 const MAX_GROUPS_PER_PROJECT = 30;
-const MAX_ITEMS_PER_GROUP = 50;
-const MAX_TOTAL_ITEMS = 260;
+const MAX_TOTAL_ITEMS = 600;
 
-// 提交少于这个数的模块不单独成条，并进「其他优化与修复」
+// 提交少于这个数的模块标「体量小」。这里只报事实，该写几条由提示词模板决定，
+// 否则切换模板时两边的指令会互相打架。
 const MIN_COMMITS_FOR_OWN_ITEM = 3;
 
-// 这里只报事实（体量够独立成条的模块有几个），不规定该写几条。
-// 颗粒度由提示词模板决定，否则切换模板时两边的指令会互相打架。
-function standaloneCount(groups: CommitGroup[]): number {
-  return groups.filter((g) => g.commitCount >= MIN_COMMITS_FOR_OWN_ITEM).length;
+// 去重后的改动条数，含因超出上限未列出的部分
+function distinctCount(groups: CommitGroup[]): number {
+  return groups.reduce((n, g) => n + g.items.length + g.omitted, 0);
 }
 
 // 整条丢弃：这些提交对周报读者没有任何信息量
@@ -160,15 +160,14 @@ export function aggregateCommits(logs: CommitLog[]): AggregateResult {
   for (const g of all) {
     const list = byProject.get(g.project) ?? [];
     // 组数超限或总条目预算耗尽，剩下的只计数不列出
-    const room = Math.min(MAX_ITEMS_PER_GROUP, budget);
-    if (list.length >= MAX_GROUPS_PER_PROJECT || room <= 0) {
+    if (list.length >= MAX_GROUPS_PER_PROJECT || budget <= 0) {
       truncated += g.items.length;
       continue;
     }
-    if (g.items.length > room) {
-      g.omitted = g.items.length - room;
+    if (g.items.length > budget) {
+      g.omitted = g.items.length - budget;
       truncated += g.omitted;
-      g.items = g.items.slice(0, room);
+      g.items = g.items.slice(0, budget);
     }
     budget -= g.items.length;
     list.push(g);
@@ -194,10 +193,9 @@ export function formatForPrompt(result: AggregateResult): string {
   const blocks: string[] = [];
   for (const [project, groups] of byProject) {
     const lines = groups.map((g) => {
-      const head = g.module === '其他' ? '- 零散改动' : `- 模块「${g.module}」`;
-      const note = g.commitCount < MIN_COMMITS_FOR_OWN_ITEM
-        ? `（${g.commitCount} 次提交，体量小）`
-        : `（${g.commitCount} 次提交）`;
+      const head = g.module === '其他' ? '- 未标模块的改动' : `- 模块「${g.module}」`;
+      const size = g.commitCount < MIN_COMMITS_FOR_OWN_ITEM ? '，体量小' : '';
+      const note = `（${g.commitCount} 次提交，${distinctCount([g])} 条不同改动${size}）`;
       const items = g.items.map((t) => `    · ${t}`).join('\n');
       const rest = g.omitted > 0 ? `\n    · （另有 ${g.omitted} 条同类改动未逐条列出）` : '';
       return `${head}${note}\n${items}${rest}`;
@@ -205,8 +203,8 @@ export function formatForPrompt(result: AggregateResult): string {
 
     const commits = groups.reduce((n, g) => n + g.commitCount, 0);
     blocks.push(
-      `## 项目 [${project}]（${commits} 次提交，${groups.length} 个模块方向，` +
-      `其中 ${standaloneCount(groups)} 个体量够独立成条）\n` +
+      `## 项目 [${project}]（${commits} 次提交，${distinctCount(groups)} 条不同改动，` +
+      `分布在 ${groups.length} 个模块）\n` +
       lines.join('\n')
     );
   }

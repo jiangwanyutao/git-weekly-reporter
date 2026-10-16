@@ -36,7 +36,9 @@ function appendReasoningDelta(delta: any, current: string) {
 // 流式生成的护栏：模型在长输入下会退化成无限重复，这些上限用来兜底
 const STREAM_IDLE_MS = 90_000;        // 超过这么久没有新数据判定为卡死
 const MAX_CONTENT_CHARS = 30_000;     // 正文硬上限
-const MAX_REASONING_CHARS = 40_000;   // 思考过程硬上限（历史死循环正是卡在这一段）
+// 思考过程硬上限（历史死循环正是卡在这一段）。提交全部送进模型后，几百条改动逐条梳理
+// 正常就要四五万字，打转靠下面的重复检测拦截，这里只兜底不重复的失控
+const MAX_REASONING_CHARS = 80_000;
 const DEGENERATE_CHECK_EVERY = 2_000; // 每新增这么多字符做一次重复检测
 
 // 末尾是否出现连续三次相同的片段——模型打转的典型特征

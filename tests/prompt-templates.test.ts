@@ -131,26 +131,33 @@ test('升级：内置模板跟随代码更新', () => {
   assert.equal(restored.promptTemplate, builtin.content);
 });
 
-test('提交少的一周：有专用内置模板，默认模板保持不变', () => {
+test('逐个功能点写：有专用内置模板，默认模板保持不变', () => {
   const few = PROMPT_TEMPLATES.find((t) => t.id === 'few-commits');
   assert.ok(few, '缺少 few-commits 模板');
-  assert.match(few.name, /提交少/);
+  assert.match(few.name, /逐个功能点/);
   assert.ok(hasCommitsVariable(few.content));
   assert.equal(DEFAULT_TEMPLATE_ID, 'feature-merge');
   assert.equal(PROMPT_TEMPLATES[0].id, 'feature-merge');
 });
 
-test('提交少的一周：模板不受「体量小」「其中 N 个体量够独立成条」标注影响，也没有压缩条目的规则', () => {
+test('逐个功能点写：忽略「体量小」标注，也没有压缩条目的规则', () => {
   const few = PROMPT_TEMPLATES.find((t) => t.id === 'few-commits')!;
-  assert.match(few.content, /体量小/);
-  assert.match(few.content, /其中 N 个体量够独立成条/);
-  assert.match(few.content, /忽略/);
-  assert.doesNotMatch(few.content, /六成到十成/);
+  assert.match(few.content, /「体量小」标注\*\*本模板一律忽略/);
   assert.doesNotMatch(few.content, /一律收进最后一条/);
-  assert.doesNotMatch(few.content, /按它标注的条目数写完/);
 });
 
-test('提交少的一周：模板可以被选中，重启后仍保持选中并跟随代码更新', () => {
+// 预处理在项目标题里报「M 条不同改动」；按模块数定条目、把一个模块当成一件事的旧说法
+// 会让没写模块的一整周提交被写成一条
+test('细颗粒度的内置模板按不同改动条数定条目数，不再按模块压缩', () => {
+  for (const id of ['feature-merge', 'detailed', 'few-commits']) {
+    const t = PROMPT_TEMPLATES.find((x) => x.id === id)!;
+    assert.match(t.content, /M 条不同改动/, id);
+    assert.match(t.content, /未标模块的改动/, id);
+    assert.doesNotMatch(t.content, /体量够独立成条|同一模块下的多条记录属于同一件事|依然只写一条|按它标注的条目数/, id);
+  }
+});
+
+test('逐个功能点写：模板可以被选中，重启后仍保持选中并跟随代码更新', () => {
   const s = selectTemplate(base, 'few-commits');
   assert.equal(s.promptTemplateId, 'few-commits');
   const restored = resolvePromptTemplate({ ...s, promptTemplate: '旧内容' });
