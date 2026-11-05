@@ -41,12 +41,18 @@ pnpm tauri:build
 ```
 
 ### Typecheck
-There is no dedicated `lint` or `test` script in `package.json` right now.
+There is no dedicated `lint` script in `package.json` right now.
 
 Typechecking happens as part of `pnpm build` (it runs `tsc` first). If you want just a typecheck without producing `dist/`:
 ```bash
 pnpm exec tsc -p tsconfig.json --noEmit
 ```
+
+### Test
+```bash
+pnpm test
+```
+Runs the `node:test` suites in `tests/**/*.test.ts`. It relies on Node's built-in type stripping (`--experimental-strip-types`), so it needs Node >= 22.6 and no extra test runner is installed. Test files import sources with an explicit `.ts` extension — keep it, or the ESM loader throws `ERR_UNKNOWN_FILE_EXTENSION`.
 
 ### Updater signing keys / updater artifacts
 Tauri updater is configured in `src-tauri/tauri.conf.json` (endpoints + public key). The repo includes `tauri-signing.key` / `.pub` at the root, and also has a helper script:

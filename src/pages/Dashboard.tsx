@@ -27,7 +27,8 @@ import {
 } from '@phosphor-icons/react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { PROMPT_TEMPLATES, CUSTOM_TEMPLATE_ID, selectTemplate } from '@/store/prompt-templates';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import dayjs from 'dayjs';
@@ -619,6 +620,32 @@ export default function Dashboard() {
                       {p.name}
                     </SelectItem>
                   ))}
+                </SelectContent>
+              </Select>
+              <Select
+                value={settings.promptTemplateId ?? PROMPT_TEMPLATES[0].id}
+                onValueChange={(id) => updateSettings(selectTemplate(settings, id))}
+                disabled={generating}
+              >
+                <SelectTrigger className="h-9 w-auto min-w-[150px] gap-2 text-[13px]">
+                  <SparkleIcon size={14} className="text-muted-foreground" />
+                  <SelectValue placeholder="提示词模板" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PROMPT_TEMPLATES.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                  {(settings.customTemplates?.length ?? 0) > 0 && <SelectSeparator />}
+                  {(settings.customTemplates ?? []).map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                  {settings.promptTemplateId === CUSTOM_TEMPLATE_ID && (
+                    <SelectItem value={CUSTOM_TEMPLATE_ID}>自定义（已手动修改）</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
               {generating ? (
