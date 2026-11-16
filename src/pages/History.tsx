@@ -2,6 +2,7 @@
 import { useAppStore } from '@/store';
 import { Report } from '@/types';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   MagnifyingGlassIcon,
@@ -48,50 +49,29 @@ export default function HistoryPage() {
   const { reports, deleteReport, settings } = useAppStore();
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Report | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [scope, setScope] = useState<Scope>('all');
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [syncingReportId, setSyncingReportId] = useState<string | null>(null);
   const exportTitle = isTauri ? "导出当前列表到本地文件" : "导出当前列表（浏览器下载）";
 
-  const handleDelete = (id: string) => {
-    if (!window.confirm('确定删除这份周报？删除后无法恢复。')) return;
-    deleteReport(id);
-    if (selectedId === id) {
+  const handleDelete = () => {
+    if (!pendingDelete) return;
+    deleteReport(pendingDelete.id);
+    if (selectedId === pendingDelete.id) {
       setSelectedId(null);
     }
+    setPendingDelete(null);
     toast({ title: "已删除", description: "周报记录已移除" });
   };
 
   const handleCopy = async (report: Report) => {
     try {
-      const parts = [];
-      parts.push(`周报日期: ${report.dateRange.start} ~ ${report.dateRange.end}`);
-      if (report.totalCommits !== undefined) parts.push(`提交总数: ${report.totalCommits}`);
-      if (report.projects && report.projects.length > 0) parts.push(`涉及项目: ${report.projects.join(', ')}`);
-      if (report.branches && report.branches.length > 0) parts.push(`涉及分支: ${report.branches.join(', ')}`);
-      parts.push('');
-
-      // Remove markdown syntax
-      const plainContent = report.content
-        .replace(/^#+\s+/gm, '') // Remove headers
-        .replace(/\*\*(.*?)\*\*/g, '$1') // Remove bold
-        .replace(/\*(.*?)\*/g, '$1') // Remove italic
-        .replace(/`{3}[\s\S]*?`{3}/g, (match) => match.replace(/`{3}/g, '')) // Remove code blocks but keep content
-        .replace(/`([^`]+)`/g, '$1') // Remove inline code
-        .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1') // Remove links
-        .replace(/^>\s+/gm, '') // Remove blockquotes
-        .replace(/^\s*[-*+]\s+/gm, '• ') // Replace list items with bullet points
-        .replace(/^\d+\.\s+/gm, (match) => match); // Keep numbered lists
-
-      parts.push(plainContent);
-
-      const fullContent = parts.join('\n');
-
-      await navigator.clipboard.writeText(fullContent);
+      await navigator.clipboard.writeText(report.content);
       setCopiedId(report.id);
       setTimeout(() => setCopiedId(null), 2000);
-      toast({ title: "复制成功", description: "周报内容(纯文本)及元数据已复制到剪贴板" });
+      toast({ title: "复制成功", description: "周报 Markdown 已复制到剪贴板" });
     } catch (err) {
       toast({ title: "复制失败", description: "无法访问剪贴板", variant: "destructive" });
     }
@@ -351,8 +331,9 @@ export default function HistoryPage() {
                     variant="ghost"
                     size="icon-sm"
                     className="text-destructive hover:text-destructive"
-                    onClick={() => handleDelete(selectedReport.id)}
+                    onClick={() => setPendingDelete(selectedReport)}
                     title="删除"
+                    aria-label="删除这份周报"
                   >
                     <TrashIcon size={16} />
                   </Button>
@@ -374,6 +355,18 @@ export default function HistoryPage() {
           )}
         </div>
       </div>
+      <Dialog open={Boolean(pendingDelete)} onOpenChange={(open) => !open && setPendingDelete(null)}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>删除历史周报</DialogTitle>
+            <DialogDescription>确定删除{pendingDelete ? `「${rangeLabel(pendingDelete)}」` : ''}这份周报？删除后无法恢复。</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" autoFocus onClick={() => setPendingDelete(null)}>取消</Button>
+            <Button variant="destructive" onClick={handleDelete}>删除周报</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

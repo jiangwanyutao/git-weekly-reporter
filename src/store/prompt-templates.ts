@@ -283,6 +283,36 @@ export const PROMPT_TEMPLATES: PromptTemplate[] = [
   },
 ];
 
+export const COMPLETED_WORK_TEMPLATE_ID = 'completed-work';
+PROMPT_TEMPLATES.push({
+  id: COMPLETED_WORK_TEMPLATE_ID,
+  name: '本周完成（新格式）',
+  description: '按项目列出本周成果，其他栏目留空供后续填写',
+  content: PROMPT_TEMPLATES[0].content.replace(
+    /\*\*输出格式（严格遵守）：\*\*[\s\S]*?(?=\*\*以下是本周的提交记录)/,
+    `**输出格式（严格遵守）：**
+按项目分别呈现，每个项目使用以下结构：
+
+【项目名称】本周（日期范围）
+
+一、上周计划兑现
+
+二、本周完成
+1. **成果短标题：** 事项及成果【进展状态】
+
+三、卡住的事
+
+五、下周计划
+
+工时：
+
+根据提交记录提炼「二、本周完成」，每个项目和栏目编号从 1 开始。每个项目必须保留上述所有栏目标题和“工时：”；上周计划兑现、卡住的事、下周计划和工时仅在输入明确提供对应信息时填写，否则标题下方留空，不写“未提供”，不加空编号，不得推测编造。日期范围及进展状态只在输入明确提供时填写，否则省略。提交或开发完成不代表已上线；只有对应成果有明确上线或验收记录时，才能标注该成果的状态，不能把其他成果的状态套用过来。不要输出“详细工作内容”或额外的日期、提交数量、项目和分支汇总。
+下方每个项目都必须写一段，不得遗漏。
+
+`
+  ),
+});
+
 export const DEFAULT_TEMPLATE_ID = PROMPT_TEMPLATES[0].id;
 export const DEFAULT_PROMPT = PROMPT_TEMPLATES[0].content;
 

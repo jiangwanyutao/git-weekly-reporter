@@ -243,12 +243,18 @@ export function findJargon(markdown: string): string[] {
   return Array.from(hits);
 }
 
-// 周报的结构指纹：几个项目、多少个编号条目。
-// 二次润色后指纹必须不变，否则说明模型顺手改了结构，该退回原稿。
+// 栏目、列表、表格及空行必须保持原有顺序，避免润色破坏自定义模板。
 export function reportShape(markdown: string): string {
-  const projects = (markdown.match(/\*\*【[^】]+】\*\*/g) || []).length;
-  const items = markdown.split('\n').filter((l) => /^\s*\d+\.\s/.test(l)).length;
-  return `${projects}项目/${items}条`;
+  return JSON.stringify(markdown.trim().split(/\r?\n/).map((line) => {
+    if (!line.trim()) return 'blank';
+    const heading = line.match(/^\s*(?:#{1,6}\s+.*|(?:\*\*)?【[^】]+】.*|(?:\*\*)?[一二三四五六七八九十]+、[^\n]*|(?:\*\*)?[^\n]{1,40}[：:](?:\*\*)?\s*|\*\*[^\n]+\*\*)$/);
+    if (heading) return `heading:${line.trim()}`;
+    const list = line.match(/^(\s*)(\d+[.)]|[-+*])\s+/);
+    if (list) return `list:${list[1].length}:${list[2]}`;
+    if (/^\s*\|/.test(line)) return `table:${line.split('|').length}`;
+    if (/^\s*>/.test(line)) return 'quote';
+    return 'text';
+  }));
 }
 
 // 生成后再兜一层：清掉模型漏抄出来的工单号、思维链标签等纯噪音

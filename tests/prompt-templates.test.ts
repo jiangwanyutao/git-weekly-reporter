@@ -21,6 +21,25 @@ import {
 const builtin = PROMPT_TEMPLATES[1];
 const base = { promptTemplate: DEFAULT_PROMPT, promptTemplateId: DEFAULT_TEMPLATE_ID, customTemplates: [], theme: 'dark' };
 
+test('自建周报模板保存并恢复后，保留缺失栏目时省略的指令', () => {
+  const content = '【项目名称】\n二、本周完成\n其他栏目没有信息时省略。\n{{commits}}';
+  const saved = addUserTemplate(base, { name: '周报格式', description: '', content });
+  const restored = resolvePromptTemplate(JSON.parse(JSON.stringify(saved)));
+  assert.equal(restored.promptTemplateId, saved.promptTemplateId);
+  assert.equal(restored.promptTemplate, content);
+});
+
+test('本周完成模板保留功能归并规则，并要求缺失栏目留空', () => {
+  const template = PROMPT_TEMPLATES.find((t) => t.id === 'completed-work')!;
+  assert.ok(template);
+  assert.match(template.content, /二、本周完成/);
+  assert.match(template.content, /标题下方留空/);
+  for (const title of ['一、上周计划兑现', '二、本周完成', '三、卡住的事', '五、下周计划', '工时：']) assert.ok(template.content.includes(title));
+  assert.match(template.content, /同一个功能哪怕跨了好几个模块/);
+  assert.doesNotMatch(template.content, /订单导出能力上线/);
+  assert.match(template.content, /\{\{commits\}\}/);
+});
+
 test('新增模板：生成 user- 前缀 id，追加到列表并立即选中，其他设置不变', () => {
   const next = addUserTemplate(base, { name: ' 我的周报 ', description: '给老板看', content: '写周报 {{commits}}' });
   assert.equal(next.customTemplates.length, 1);
@@ -129,6 +148,14 @@ test('升级：老用户的「自定义」提示词原样保留', () => {
 test('升级：内置模板跟随代码更新', () => {
   const restored = resolvePromptTemplate({ promptTemplate: '旧内容', promptTemplateId: builtin.id });
   assert.equal(restored.promptTemplate, builtin.content);
+});
+
+test('生成时已选中的本周完成模板使用最新内容，不沿用旧的省略栏目指令', () => {
+  const restored = resolvePromptTemplate({ promptTemplateId: 'completed-work', promptTemplate: '旧版：连标题一起省略' });
+  assert.match(restored.promptTemplate, /标题下方留空/);
+  assert.doesNotMatch(restored.promptTemplate, /连标题一起省略/);
+  assert.match(restored.promptTemplate, /一、上周计划兑现/);
+  assert.match(restored.promptTemplate, /工时：/);
 });
 
 test('逐个功能点写：有专用内置模板，默认模板保持不变', () => {

@@ -3,6 +3,7 @@ import { useAppStore } from '@/store';
 import { fetchGitLogs, getProjectContext, getProjectAuthors } from '@/lib/git';
 import { generateWeeklyReport, getActiveProvider, polishReport } from '@/lib/glm';
 import { aggregateCommits, formatForPrompt, sanitizeReport, withReportHeader, findJargon, reportShape } from '@/lib/commits';
+import { completeWorkSections } from '@/lib/report-format';
 import { syncReportToNotion } from '@/lib/notion';
 import { CommitLog, Report } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -28,7 +29,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
 import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { PROMPT_TEMPLATES, CUSTOM_TEMPLATE_ID, selectTemplate } from '@/store/prompt-templates';
+import { PROMPT_TEMPLATES, CUSTOM_TEMPLATE_ID, COMPLETED_WORK_TEMPLATE_ID, isUserTemplateId, resolvePromptTemplate, selectTemplate } from '@/store/prompt-templates';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import dayjs from 'dayjs';
@@ -239,7 +240,7 @@ export default function Dashboard() {
       setStep('generation', { status: 'running', details: `${activeProviderLabel} 流式输出中` });
       const rawReport = await generateWeeklyReport(
         settings,
-        settings.promptTemplate,
+        resolvePromptTemplate(settings).promptTemplate,
         commitsText,
         projectContext,
         (chunk) => setGeneratedReport(chunk),
@@ -251,7 +252,9 @@ export default function Dashboard() {
       // 步骤 4：兜底清洗；仍有技术词才二次润色，干净时跳过，不产生额外调用
       const rangeStart = dateRange?.from ? dayjs(dateRange.from).format('YYYY-MM-DD') : '';
       const rangeEnd = dateRange?.to ? dayjs(dateRange.to).format('YYYY-MM-DD') : '';
-      let cleaned = sanitizeReport(rawReport);
+      const customTemplate = settings.promptTemplateId === CUSTOM_TEMPLATE_ID || settings.promptTemplateId === COMPLETED_WORK_TEMPLATE_ID || isUserTemplateId(settings.promptTemplateId);
+      const sanitized = sanitizeReport(rawReport);
+      let cleaned = reportShape(sanitized) === reportShape(rawReport) ? sanitized : rawReport;
       const removed = rawReport.length - cleaned.length;
 
       const jargon = findJargon(cleaned);
@@ -285,7 +288,9 @@ export default function Dashboard() {
         }
       }
 
-      const reportContent = withReportHeader(cleaned, rangeStart, rangeEnd);
+      const reportContent = settings.promptTemplateId === COMPLETED_WORK_TEMPLATE_ID
+        ? completeWorkSections(cleaned)
+        : customTemplate ? cleaned : withReportHeader(cleaned, rangeStart, rangeEnd);
       setStep('cleanup', {
         status: 'completed',
         details: removed > 0 ? `清除了 ${removed} 个字符的技术标记` : '未发现需要清除的技术标记',

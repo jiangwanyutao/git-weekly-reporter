@@ -257,7 +257,7 @@ export async function generateWeeklyReport(
     return mockContent;
   }
 
-  const userPrompt = `${promptTemplate.replace("{{commits}}", commits)}
+  const userPrompt = `${promptTemplate.replace("{{commits}}", () => commits)}
 
 # 项目背景信息（仅供你理解项目用途，不要把这些背景本身写进周报）
 以下是各相关项目的自动分析结果（来自 README、package.json 等）。每段以「## 项目 [项目名]」开头，其中的项目名与上方提交记录中每条前的 [项目名] 前缀一一对应，请据此把提交准确归类到对应项目，并在周报中沿用该项目名：
@@ -426,7 +426,7 @@ export async function polishReport(
 ${jargon.map((w) => `- ${w}`).join('\n')}
 
 改写要求：
-- 项目分段、条目编号、加粗标题的格式必须完全保持原样
+- 所有栏目标题、项目分段、条目编号、表格、空行和加粗标题的格式必须完全保持原样
 - 不许增加、删除或合并任何条目
 - 用这项改动对**使用者**的意义来表述；实在判断不出含义的，就把该技术词连同它所在的短语一起去掉，保证句子读得通
 - 直接输出改写后的完整周报，不要任何解释或前后缀

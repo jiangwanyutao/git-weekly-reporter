@@ -31,6 +31,7 @@ type Draft = { mode: 'create' | 'edit'; id?: string; name: string; description: 
 export function PromptTemplatePicker({ settings, onChange }: Props) {
   const userTemplates = settings.customTemplates ?? [];
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<PromptTemplate | null>(null);
   const [nameError, setNameError] = useState<string | null>(null);
 
   const openCreate = (content: string) => {
@@ -59,11 +60,13 @@ export function PromptTemplatePicker({ settings, onChange }: Props) {
     setDraft(null);
   };
 
-  const deleteTemplate = (t: PromptTemplate) => {
-    if (!window.confirm(`确定删除模板「${t.name}」？删除后无法恢复。`)) return;
+  const deleteTemplate = () => {
+    const t = pendingDelete;
+    if (!t) return;
     const wasSelected = settings.promptTemplateId === t.id;
     onChange((prev) => removeUserTemplate(prev, t.id));
     toast({ title: `已删除模板「${t.name}」`, description: wasSelected ? '已切回默认模板' : undefined });
+    setPendingDelete(null);
   };
 
   const choose = (t: PromptTemplate) => {
@@ -95,10 +98,11 @@ export function PromptTemplatePicker({ settings, onChange }: Props) {
           <span className="line-clamp-2 text-xs text-muted-foreground">{t.description || '没有说明'}</span>
         </span>
         {isUser && (
-          <span className="flex shrink-0 gap-0.5" onClick={(e) => e.stopPropagation()}>
+          <span className="flex shrink-0 gap-0.5" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
             <button
               type="button"
               title="重命名"
+              aria-label={`重命名模板 ${t.name}`}
               onClick={() => openEdit(t)}
               className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
             >
@@ -107,7 +111,8 @@ export function PromptTemplatePicker({ settings, onChange }: Props) {
             <button
               type="button"
               title="删除"
-              onClick={() => deleteTemplate(t)}
+              aria-label={`删除模板 ${t.name}`}
+              onClick={() => setPendingDelete(t)}
               className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-background hover:text-destructive"
             >
               <TrashIcon size={14} />
@@ -163,6 +168,19 @@ export function PromptTemplatePicker({ settings, onChange }: Props) {
           提示词里没有 <code className="font-mono">{'{{commits}}'}</code>，生成时模型拿不到提交记录。
         </p>
       )}
+
+      <Dialog open={Boolean(pendingDelete)} onOpenChange={(open) => !open && setPendingDelete(null)}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>删除提示词模板</DialogTitle>
+            <DialogDescription>确定删除模板「{pendingDelete?.name}」？保存更改后无法恢复。</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" autoFocus onClick={() => setPendingDelete(null)}>取消</Button>
+            <Button variant="destructive" onClick={deleteTemplate}>删除模板</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={Boolean(draft)} onOpenChange={(o) => !o && setDraft(null)}>
         <DialogContent className="sm:max-w-[560px]">
