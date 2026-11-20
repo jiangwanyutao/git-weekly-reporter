@@ -1,3 +1,4 @@
+import { requestModel } from './model-http.ts';
 import type { AppSettings, ModelProvider, ProviderProtocol } from '@/types';
 
 // 从设置中取出当前生效的提供商（找不到则回退到第一个）
@@ -171,21 +172,16 @@ export async function testModelConnection(settings: AppSettings): Promise<{
     return { providerName: name, model };
   }
 
-  const response = await fetch(buildEndpoint(provider), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(
-      buildRequestBody(protocol, model, "Reply with exactly OK", false)
-    ),
-  });
+  const response = await requestModel(
+    buildEndpoint(provider), apiKey,
+    buildRequestBody(protocol, model, "Reply with exactly OK", false),
+  );
 
   if (!response.ok) {
     throw await buildProviderError(response, name);
   }
 
+  await response.json();
   return { providerName: name, model };
 }
 
@@ -265,17 +261,9 @@ ${projectContext}
 `;
 
   try {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(
-        buildRequestBody(protocol, model, userPrompt, true)
-      ),
-      signal: signal
-    });
+    const response = await requestModel(
+      endpoint, apiKey, buildRequestBody(protocol, model, userPrompt, true), signal,
+    );
 
     if (!response.ok) {
       throw await buildProviderError(response, provider.name);
@@ -434,18 +422,11 @@ ${jargon.map((w) => `- ${w}`).join('\n')}
 周报正文：
 ${markdown}`;
 
-  const response = await fetch(buildEndpoint(provider), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${provider.apiKey}`,
-    },
-    body: JSON.stringify(
-      // 输出是整篇周报，预算按原文长度放宽
-      buildRequestBody(provider.protocol, provider.model, prompt, false, 16384)
-    ),
-    signal,
-  });
+  const response = await requestModel(
+    buildEndpoint(provider), provider.apiKey,
+    // 输出是整篇周报，预算按原文长度放宽
+    buildRequestBody(provider.protocol, provider.model, prompt, false, 16384), signal,
+  );
 
   if (!response.ok) throw await buildProviderError(response, provider.name);
 

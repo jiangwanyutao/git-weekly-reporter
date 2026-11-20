@@ -1,8 +1,195 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 use serde::Serialize;
 use serde_json::{json, Value};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use tauri::Manager;
+
+#[derive(Default)]
+struct ModelRequests(Arc<Mutex<HashMap<String, tauri::async_runtime::JoinHandle<()>>>>);
+
+#[derive(Clone, Serialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+enum ModelHttpEvent {
+    Headers { status: u16, headers: HashMap<String, String> },
+    Chunk { data: Vec<u8> },
+    End,
+    Error { message: String },
+}
+
+fn model_request(url: &str, api_key: &str, body: &Value) -> Result<reqwest::RequestBuilder, String> {
+    let url = reqwest::Url::parse(url).map_err(|_| "模型接口地址无效".to_string())?;
+    if !matches!(url.scheme(), "http" | "https") || url.host_str().is_none() {
+        return Err("模型接口地址必须使用 HTTP 或 HTTPS".to_string());
+    }
+    let client = reqwest::Client::builder()
+        // 不跟随重定向，避免把模型密钥交给其他端点。
+        .redirect(reqwest::redirect::Policy::none())
+        .connect_timeout(Duration::from_secs(30))
+        .build()
+        .map_err(|error| format!("初始化模型 HTTP 客户端失败: {}", error.without_url()))?;
+    Ok(client.post(url).bearer_auth(api_key).json(body))
+}
+
+async fn stream_model_request(
+    request: reqwest::RequestBuilder,
+    on_event: &tauri::ipc::Channel<ModelHttpEvent>,
+) -> Result<(), String> {
+    let mut response = request.send().await
+        .map_err(|error| format!("模型请求失败: {}", error.without_url()))?;
+    on_event.send(ModelHttpEvent::Headers {
+        status: response.status().as_u16(),
+        headers: response.headers().iter().filter_map(|(name, value)| {
+            value.to_str().ok().map(|value| (name.to_string(), value.to_string()))
+        }).collect(),
+    }).map_err(|_| "模型响应通道已关闭".to_string())?;
+    while let Some(chunk) = response.chunk().await
+        .map_err(|error| format!("读取模型响应失败: {}", error.without_url()))? {
+        on_event.send(ModelHttpEvent::Chunk { data: chunk.to_vec() })
+            .map_err(|_| "模型响应通道已关闭".to_string())?;
+    }
+    on_event.send(ModelHttpEvent::End).map_err(|_| "模型响应通道已关闭".to_string())
+}
+
+#[tauri::command]
+fn start_model_request(
+    request_id: String,
+    url: String,
+    api_key: String,
+    body: Value,
+    on_event: tauri::ipc::Channel<ModelHttpEvent>,
+    state: tauri::State<'_, ModelRequests>,
+) -> Result<(), String> {
+    let request = model_request(&url, &api_key, &body)?;
+    let requests = state.0.clone();
+    let mut active = state.0.lock().map_err(|_| "模型请求状态不可用".to_string())?;
+    if active.contains_key(&request_id) {
+        return Err("模型请求标识重复".to_string());
+    }
+    let task_id = request_id.clone();
+    // 持锁到句柄登记完成，避免快速响应先清理、后登记造成泄漏。
+    let handle = tauri::async_runtime::spawn(async move {
+        if let Err(message) = stream_model_request(request, &on_event).await {
+            let _ = on_event.send(ModelHttpEvent::Error { message });
+        }
+        if let Ok(mut active) = requests.lock() {
+            active.remove(&task_id);
+        }
+    });
+    active.insert(request_id, handle);
+    Ok(())
+}
+
+#[tauri::command]
+fn cancel_model_request(request_id: String, state: tauri::State<'_, ModelRequests>) -> Result<(), String> {
+    if let Some(handle) = state.0.lock().map_err(|_| "模型请求状态不可用".to_string())?.remove(&request_id) {
+        handle.abort();
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod model_http_tests {
+    use super::*;
+    use std::io::{BufRead, BufReader, Read, Write};
+    use std::net::TcpListener;
+
+    #[test]
+    fn rejects_non_http_model_endpoints() {
+        for url in ["file:///secret", "ftp://example.com", "not a url"] {
+            assert!(model_request(url, "test", &json!({})).is_err());
+        }
+    }
+
+    #[test]
+    fn aborting_request_closes_the_active_stream() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/chat/completions", listener.local_addr().unwrap());
+        let server = std::thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+            let mut reader = BufReader::new(&mut socket);
+            let mut length = 0;
+            loop {
+                let mut line = String::new();
+                reader.read_line(&mut line).unwrap();
+                if line == "\r\n" { break; }
+                if let Some(value) = line.to_lowercase().strip_prefix("content-length:") {
+                    length = value.trim().parse().unwrap();
+                }
+            }
+            reader.read_exact(&mut vec![0; length]).unwrap();
+            write!(socket, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n1\r\nx\r\n").unwrap();
+            assert_eq!(socket.read(&mut [0; 1]).unwrap(), 0);
+        });
+        let (sent, received) = std::sync::mpsc::channel();
+        let channel = tauri::ipc::Channel::new(move |event| {
+            let value: Value = event.deserialize().unwrap();
+            if value["type"] == "chunk" { sent.send(()).unwrap(); }
+            Ok(())
+        });
+        let request = model_request(&url, "test", &json!({})).unwrap();
+        let handle = tauri::async_runtime::spawn(async move {
+            stream_model_request(request, &channel).await
+        });
+        received.recv_timeout(Duration::from_secs(5)).unwrap();
+        handle.abort();
+        assert!(tauri::async_runtime::block_on(handle).is_err());
+        server.join().unwrap();
+    }
+
+    #[test]
+    fn preserves_http_errors_and_stream_bytes_without_following_redirects() {
+        for (status, extra_headers, body) in [
+            (200, "Content-Type: text/event-stream\r\n", "data: 中文\n\n"),
+            (401, "Content-Type: application/json\r\n", "{\"error\":\"invalid key\"}"),
+            (307, "Location: http://127.0.0.1:1/private\r\n", "redirect"),
+        ] {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let url = format!("http://{}/chat/completions", listener.local_addr().unwrap());
+            let server = std::thread::spawn(move || {
+                let (mut socket, _) = listener.accept().unwrap();
+                socket.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+                let mut reader = BufReader::new(&mut socket);
+                let mut request_headers = String::new();
+                let mut length = 0;
+                loop {
+                    let mut line = String::new();
+                    reader.read_line(&mut line).unwrap();
+                    if line == "\r\n" { break; }
+                    if let Some(value) = line.to_lowercase().strip_prefix("content-length:") {
+                        length = value.trim().parse().unwrap();
+                    }
+                    request_headers.push_str(&line);
+                }
+                let mut request_body = vec![0; length];
+                reader.read_exact(&mut request_body).unwrap();
+                assert!(request_headers.to_lowercase().contains("authorization: bearer test"));
+                assert_eq!(serde_json::from_slice::<Value>(&request_body).unwrap(), json!({"model":"test"}));
+                write!(socket, "HTTP/1.1 {} Test\r\n{}Content-Length: {}\r\nConnection: close\r\n\r\n{}", status, extra_headers, body.len(), body).unwrap();
+            });
+            let events = Arc::new(Mutex::new(Vec::<Value>::new()));
+            let received = events.clone();
+            let channel = tauri::ipc::Channel::new(move |event| {
+                received.lock().unwrap().push(event.deserialize().unwrap());
+                Ok(())
+            });
+            tauri::async_runtime::block_on(stream_model_request(
+                model_request(&url, "test", &json!({"model":"test"})).unwrap(), &channel,
+            )).unwrap();
+            server.join().unwrap();
+            let events = events.lock().unwrap();
+            assert_eq!(events[0]["type"], "headers");
+            assert_eq!(events[0]["status"], status);
+            let bytes: Vec<u8> = events.iter().filter(|event| event["type"] == "chunk")
+                .flat_map(|event| serde_json::from_value::<Vec<u8>>(event["data"].clone()).unwrap()).collect();
+            assert_eq!(bytes, body.as_bytes());
+            assert_eq!(events.last().unwrap()["type"], "end");
+        }
+    }
+}
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -259,6 +446,7 @@ mod scan_tests {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(ModelRequests::default())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
@@ -273,7 +461,7 @@ pub fn run() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![greet, create_notion_page, scan_git_repos])
+        .invoke_handler(tauri::generate_handler![greet, create_notion_page, scan_git_repos, start_model_request, cancel_model_request])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
