@@ -10,13 +10,18 @@ export async function requestModel(
   apiKey: string,
   body: object,
   signal?: AbortSignal,
+  headers?: Record<string, string>,
+  method: 'GET' | 'POST' = 'POST',
+  proxyUrl?: string,
 ): Promise<Response> {
   signal?.throwIfAborted();
+  if (method !== 'GET' && method !== 'POST') throw new Error('模型请求仅支持 GET 或 POST');
   if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) {
+    if (proxyUrl) throw new Error('网页模式无法指定请求代理，请在桌面客户端使用代理设置');
     return fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify(body),
+      method,
+      headers: headers ?? { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: method === 'GET' ? undefined : JSON.stringify(body),
       signal,
     });
   }
@@ -76,7 +81,7 @@ export async function requestModel(
       }
     });
     signal?.addEventListener('abort', abort, { once: true });
-    started = invoke<void>('start_model_request', { requestId, url, apiKey, body, onEvent });
+    started = invoke<void>('start_model_request', { requestId, url, apiKey, body: method === 'GET' ? null : body, headers, method, proxyUrl, onEvent });
     void started.catch(fail);
   });
 }

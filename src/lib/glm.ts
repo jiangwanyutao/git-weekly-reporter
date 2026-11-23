@@ -1,37 +1,13 @@
 import { requestModel } from './model-http.ts';
-import type { AppSettings, ModelProvider, ProviderProtocol } from '@/types';
+import { activeProxy } from './proxy.ts';
+import type { AppSettings, ModelProvider } from '@/types';
+import { validateProvider, buildProviderHeaders, applyCustomBody } from './provider-config.ts';
+import { buildEndpoint, buildRequestBody, readResponseText, parseStreamEvent, readSseEvents, checkFinish } from './provider-protocol.ts';
 
 // 从设置中取出当前生效的提供商（找不到则回退到第一个）
 export function getActiveProvider(settings: AppSettings): ModelProvider | undefined {
   const list = settings.providers || [];
   return list.find((p) => p.id === settings.activeProviderId) ?? list[0];
-}
-
-// 内置(glm/minimax)按 base 自动拼接 /chat/completions；自定义厂商使用用户填写的完整地址
-function buildEndpoint(provider: ModelProvider): string {
-  const url = (provider.baseUrl || '').trim();
-  if (provider.builtin) {
-    return `${url.replace(/\/+$/, '')}/chat/completions`;
-  }
-  return url;
-}
-
-function appendReasoningDelta(delta: any, current: string) {
-  if (delta?.reasoning_content) {
-    return current + delta.reasoning_content;
-  }
-
-  if (Array.isArray(delta?.reasoning_details)) {
-    let next = current;
-    for (const detail of delta.reasoning_details) {
-      if (typeof detail?.text === 'string') {
-        next = detail.text.startsWith(next) ? detail.text : next + detail.text;
-      }
-    }
-    return next;
-  }
-
-  return current;
 }
 
 // 流式生成的护栏：模型在长输入下会退化成无限重复，这些上限用来兜底
@@ -70,57 +46,26 @@ async function readWithTimeout<T>(
   }
 }
 
-function buildRequestBody(
-  protocol: ProviderProtocol,
-  model: string,
-  userPrompt: string,
-  stream: boolean,
-  // 非流式默认按连通性测试给 64；润色整篇周报要显式放开
-  maxTokens?: number
-) {
-  const base = {
-    model,
-    messages: [{ role: "user", content: userPrompt }],
-    stream,
-    // 归纳类任务不需要高随机度；1.0 在长输出下显著抬高重复退化概率
-    temperature: stream ? 0.3 : 1.0,
-    // 提交多的一周条目数会明显变多，且带思考的模型会先耗掉一大块预算；
-    // 预算给足，真正防失控靠下面的流式护栏而不是靠这个上限
-    max_tokens: maxTokens ?? (stream ? 32768 : 64),
-  };
-
-  if (protocol === 'minimax') {
-    return { ...base, reasoning_split: true };
-  }
-
-  if (protocol === 'glm') {
-    return { ...base, thinking: { type: "enabled" } };
-  }
-
-  // openai 兼容：标准 body，不附加厂商私有字段
-  return base;
-}
-
 async function buildProviderError(
   response: Response,
-  providerName: string
+  providerName: string,
+  endpoint: string,
 ): Promise<Error> {
+  if (response.status === 405) {
+    await response.body?.cancel().catch(() => {});
+    const url = new URL(endpoint);
+    return new Error(`${providerName} 请求失败 (HTTP 405)：当前地址不接受 POST。请检查接口协议与地址模式，订阅网页不能用作 API 地址。实际请求：POST ${url.origin}${url.pathname}`);
+  }
   let serverMessage = '';
 
+  const errorText = await response.text().catch(() => '');
   try {
-    const errorData = await response.json();
-    serverMessage =
-      errorData?.error?.message ||
-      errorData?.message ||
-      errorData?.msg ||
-      '';
+    const errorData = JSON.parse(errorText);
+    serverMessage = errorData?.error?.message || errorData?.message || errorData?.msg || '';
   } catch {
-    try {
-      serverMessage = (await response.text()).trim();
-    } catch {
-      serverMessage = '';
-    }
+    serverMessage = errorText.trim();
   }
+  if (typeof serverMessage !== 'string') serverMessage = '';
 
   const normalizedMessage = serverMessage.toLowerCase();
   const isQuotaIssue =
@@ -164,24 +109,22 @@ export async function testModelConnection(settings: AppSettings): Promise<{
 
   const { name, apiKey, model, protocol } = provider;
 
-  if (!apiKey) {
-    throw new Error(`${name} API Key 未填写`);
-  }
-
   if (apiKey === "MOCK") {
     return { providerName: name, model };
   }
 
+  validateProvider(provider);
   const response = await requestModel(
     buildEndpoint(provider), apiKey,
-    buildRequestBody(protocol, model, "Reply with exactly OK", false),
+    applyCustomBody(provider, buildRequestBody(protocol, model, "Reply with exactly OK", false)),
+    undefined, buildProviderHeaders(provider, crypto.randomUUID()), 'POST', activeProxy(settings),
   );
 
   if (!response.ok) {
-    throw await buildProviderError(response, name);
+    throw await buildProviderError(response, name, buildEndpoint(provider));
   }
 
-  await response.json();
+  readResponseText(protocol, await response.json());
   return { providerName: name, model };
 }
 
@@ -192,18 +135,14 @@ export async function generateWeeklyReport(
   projectContext: string,
   onStream?: (chunk: string) => void,
   onReasoning?: (chunk: string) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  sessionId = crypto.randomUUID(),
 ): Promise<string> {
   const provider = getActiveProvider(settings);
   if (!provider) {
     throw new Error("未配置任何模型提供商，请先在设置页添加");
   }
   const { apiKey, model, protocol } = provider;
-  const endpoint = buildEndpoint(provider);
-
-  if (!apiKey) {
-    throw new Error("API Key is missing");
-  }
 
   // Mock Mode
   if (apiKey === "MOCK") {
@@ -253,6 +192,7 @@ export async function generateWeeklyReport(
     return mockContent;
   }
 
+  validateProvider(provider);
   const userPrompt = `${promptTemplate.replace("{{commits}}", () => commits)}
 
 # 项目背景信息（仅供你理解项目用途，不要把这些背景本身写进周报）
@@ -262,64 +202,41 @@ ${projectContext}
 
   try {
     const response = await requestModel(
-      endpoint, apiKey, buildRequestBody(protocol, model, userPrompt, true), signal,
+      buildEndpoint(provider, true), apiKey,
+      applyCustomBody(provider, buildRequestBody(protocol, model, userPrompt, true)), signal,
+      buildProviderHeaders(provider, sessionId), 'POST', activeProxy(settings),
     );
 
     if (!response.ok) {
-      throw await buildProviderError(response, provider.name);
+      throw await buildProviderError(response, provider.name, buildEndpoint(provider, true));
     }
 
     if (!response.body) throw new Error("Response body is empty");
 
     const reader = response.body.getReader();
-    const decoder = new TextDecoder("utf-8");
-    let buffer = "";          // 跨网络分片的残行缓冲，缺了它会丢内容
     let fullContent = "";
     let fullReasoning = "";
     let contentCheckedAt = 0;
     let reasoningCheckedAt = 0;
     let loopGuard: string | null = null;
     let finishReason: string | null = null;
+    let completed = false;
 
     try {
-      streaming: while (true) {
-        const { done, value } = await readWithTimeout(reader, STREAM_IDLE_MS);
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        // 最后一段可能是被切断的半行，留到下一片再拼
-        buffer = lines.pop() ?? "";
-
-        for (const rawLine of lines) {
-          const line = rawLine.trim();
-          if (!line.startsWith("data:")) continue;
-
-          const data = line.slice(5).trim();
-          if (!data || data === "[DONE]") continue;
-
-          try {
-            const parsed = JSON.parse(data);
-            const choice = parsed?.choices?.[0];
-            // 记下结束原因：length 表示被输出上限截断，会整段丢内容（曾丢掉过一整个项目）
-            if (choice?.finish_reason) finishReason = choice.finish_reason;
-            const delta = choice?.delta;
-            if (!delta) continue;
-
-            const updatedReasoning = appendReasoningDelta(delta, fullReasoning);
-            if (updatedReasoning !== fullReasoning) {
-              fullReasoning = updatedReasoning;
-              if (onReasoning) onReasoning(fullReasoning);
-            }
-
-            if (delta.content) {
-              fullContent += delta.content;
-              if (onStream) onStream(fullContent);
-            }
-          } catch {
-            console.warn("Failed to parse stream chunk:", data);
-          }
+      for await (const data of readSseEvents(() => readWithTimeout(reader, STREAM_IDLE_MS))) {
+        if (!data.trim()) continue;
+        const delta = parseStreamEvent(protocol, data, fullReasoning);
+        if (delta.finishReason) finishReason = delta.finishReason;
+        if (delta.finishReason || delta.done) completed = true;
+        if (delta.reasoning !== fullReasoning) {
+          fullReasoning = delta.reasoning;
+          onReasoning?.(fullReasoning);
         }
+        if (delta.content) {
+          fullContent += delta.content;
+          onStream?.(fullContent);
+        }
+        if (delta.done) break;
 
         // 护栏：正文/思考超长或开始打转就主动收流，避免无限生成
         if (fullContent.length - contentCheckedAt >= DEGENERATE_CHECK_EVERY) {
@@ -335,7 +252,7 @@ ${projectContext}
 
         if (loopGuard) {
           await reader.cancel().catch(() => {});
-          break streaming;
+          break;
         }
       }
     } catch (error: any) {
@@ -351,6 +268,9 @@ ${projectContext}
         );
       }
       throw error;
+    } finally {
+      await reader.cancel().catch(() => {});
+      reader.releaseLock();
     }
 
     if (loopGuard) {
@@ -367,16 +287,9 @@ ${projectContext}
       throw new Error(`${provider.name} 没有返回任何正文内容，请稍后重试或更换模型`);
     }
 
-    // 被输出上限截断时会静默少写内容，必须让调用方知道，不能当成正常结果
-    if (finishReason === 'length') {
-      console.warn('Output truncated by max_tokens, content length:', fullContent.length);
-      throw Object.assign(
-        new Error(
-          `${provider.name} 输出达到长度上限被截断，周报可能缺少后面的项目。` +
-          `请减少本次勾选的提交数量后重试`
-        ),
-        { partialContent: fullContent }
-      );
+    checkFinish(finishReason ?? undefined, fullContent);
+    if (!completed) {
+      throw Object.assign(new Error(`${provider.name} 响应中途结束，请重新生成`), { partialContent: fullContent });
     }
 
     return fullContent;
@@ -396,16 +309,18 @@ export async function polishReport(
   settings: AppSettings,
   markdown: string,
   jargon: string[],
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  sessionId = crypto.randomUUID(),
 ): Promise<string> {
   const provider = getActiveProvider(settings);
-  if (!provider?.apiKey) throw new Error("未配置模型，无法润色");
+  if (!provider) throw new Error("未配置模型，无法润色");
   if (!jargon.length) return markdown;
 
   if (provider.apiKey === "MOCK") {
     return jargon.reduce((text, w) => text.split(w).join('相关配置'), markdown);
   }
 
+  validateProvider(provider);
   const prompt = `下面是一份已经写好的周报，整体没问题，只是个别地方混进了读者看不懂的技术词。
 
 请只做一件事：把下列技术词所在的句子改写成人话，**其他内容一个字都不要动**。
@@ -425,15 +340,11 @@ ${markdown}`;
   const response = await requestModel(
     buildEndpoint(provider), provider.apiKey,
     // 输出是整篇周报，预算按原文长度放宽
-    buildRequestBody(provider.protocol, provider.model, prompt, false, 16384), signal,
+    applyCustomBody(provider, buildRequestBody(provider.protocol, provider.model, prompt, false, 16384)), signal,
+    buildProviderHeaders(provider, sessionId), 'POST', activeProxy(settings),
   );
 
-  if (!response.ok) throw await buildProviderError(response, provider.name);
+  if (!response.ok) throw await buildProviderError(response, provider.name, buildEndpoint(provider));
 
-  const data = await response.json();
-  const text = data?.choices?.[0]?.message?.content;
-  if (typeof text !== 'string' || !text.trim()) {
-    throw new Error(`${provider.name} 润色未返回内容`);
-  }
-  return text.trim();
+  return readResponseText(provider.protocol, await response.json()).trim();
 }

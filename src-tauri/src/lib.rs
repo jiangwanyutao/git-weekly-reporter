@@ -19,18 +19,70 @@ enum ModelHttpEvent {
     Error { message: String },
 }
 
-fn model_request(url: &str, api_key: &str, body: &Value) -> Result<reqwest::RequestBuilder, String> {
+fn model_request(url: &str, api_key: &str, body: &Value, headers: Option<HashMap<String, String>>, method: Option<&str>, proxy_url: Option<&str>) -> Result<reqwest::RequestBuilder, String> {
+    let method = match method.unwrap_or("POST") {
+        "GET" => reqwest::Method::GET,
+        "POST" => reqwest::Method::POST,
+        _ => return Err("模型请求仅支持 GET 或 POST".to_string()),
+    };
     let url = reqwest::Url::parse(url).map_err(|_| "模型接口地址无效".to_string())?;
     if !matches!(url.scheme(), "http" | "https") || url.host_str().is_none() {
         return Err("模型接口地址必须使用 HTTP 或 HTTPS".to_string());
     }
-    let client = reqwest::Client::builder()
+    let mut client = reqwest::Client::builder()
+        .user_agent(concat!("AI-Weekly-Reporter/", env!("CARGO_PKG_VERSION")))
         // 不跟随重定向，避免把模型密钥交给其他端点。
         .redirect(reqwest::redirect::Policy::none())
-        .connect_timeout(Duration::from_secs(30))
-        .build()
+        .connect_timeout(Duration::from_secs(30));
+    if let Some(proxy_url) = proxy_url.filter(|value| !value.trim().is_empty()) {
+        let proxy = reqwest::Url::parse(proxy_url.trim()).map_err(|_| "代理地址无效".to_string())?;
+        if !matches!(proxy.scheme(), "http" | "https") || proxy.host_str().is_none()
+            || proxy.query().is_some() || proxy.fragment().is_some() || proxy.path() != "/" {
+            return Err("代理地址必须是 HTTP/HTTPS 代理，不能包含路径、查询或片段".to_string());
+        }
+        client = client.proxy(reqwest::Proxy::all(proxy).map_err(|_| "代理地址无效".to_string())?);
+    }
+    let client = client.build()
         .map_err(|error| format!("初始化模型 HTTP 客户端失败: {}", error.without_url()))?;
-    Ok(client.post(url).bearer_auth(api_key).json(body))
+    let mut request = client.request(method.clone(), url);
+    if method == reqwest::Method::POST { request = request.json(body); }
+    if let Some(headers) = headers {
+        let mut parsed = reqwest::header::HeaderMap::new();
+        for (name, value) in headers {
+            let name = name.to_ascii_lowercase();
+            if matches!(name.as_str(), "host" | "content-length" | "transfer-encoding" | "connection" |
+                "cookie" | "set-cookie" | "origin" | "referer" | "accept-encoding" | "upgrade" |
+                "te" | "trailer" | "expect") || name.starts_with("proxy-") || name.starts_with("sec-") {
+                return Err("不能覆盖 HTTP 客户端管理的请求头".to_string());
+            }
+            let name = reqwest::header::HeaderName::from_bytes(name.as_bytes())
+                .map_err(|_| "请求头名称无效".to_string())?;
+            if parsed.contains_key(&name) { return Err("请求头名称重复".to_string()); }
+            if !value.bytes().all(|b| b == b'\t' || (0x20..=0x7e).contains(&b)) {
+                return Err("请求头必须使用单行 ASCII 值".to_string());
+            }
+            if name == reqwest::header::CONTENT_TYPE && !value.to_ascii_lowercase().split(';').next().unwrap_or("").trim().eq("application/json") {
+                return Err("模型请求必须使用 application/json".to_string());
+            }
+            let value = reqwest::header::HeaderValue::from_str(&value)
+                .map_err(|_| "请求头值无效".to_string())?;
+            parsed.insert(name, value);
+        }
+        request = request.headers(parsed);
+    } else {
+        request = request.bearer_auth(api_key);
+    }
+    Ok(request)
+}
+
+fn model_network_error(error: reqwest::Error) -> String {
+    if error.is_timeout() {
+        "模型请求超时，请检查网络或代理设置后重试".to_string()
+    } else if error.is_connect() {
+        "无法连接模型服务，请检查接口地址、网络和代理设置".to_string()
+    } else {
+        format!("模型网络请求失败: {}", error.without_url())
+    }
 }
 
 async fn stream_model_request(
@@ -38,7 +90,7 @@ async fn stream_model_request(
     on_event: &tauri::ipc::Channel<ModelHttpEvent>,
 ) -> Result<(), String> {
     let mut response = request.send().await
-        .map_err(|error| format!("模型请求失败: {}", error.without_url()))?;
+        .map_err(model_network_error)?;
     on_event.send(ModelHttpEvent::Headers {
         status: response.status().as_u16(),
         headers: response.headers().iter().filter_map(|(name, value)| {
@@ -46,7 +98,7 @@ async fn stream_model_request(
         }).collect(),
     }).map_err(|_| "模型响应通道已关闭".to_string())?;
     while let Some(chunk) = response.chunk().await
-        .map_err(|error| format!("读取模型响应失败: {}", error.without_url()))? {
+        .map_err(model_network_error)? {
         on_event.send(ModelHttpEvent::Chunk { data: chunk.to_vec() })
             .map_err(|_| "模型响应通道已关闭".to_string())?;
     }
@@ -59,10 +111,13 @@ fn start_model_request(
     url: String,
     api_key: String,
     body: Value,
+    headers: Option<HashMap<String, String>>,
+    method: Option<String>,
+    proxy_url: Option<String>,
     on_event: tauri::ipc::Channel<ModelHttpEvent>,
     state: tauri::State<'_, ModelRequests>,
 ) -> Result<(), String> {
-    let request = model_request(&url, &api_key, &body)?;
+    let request = model_request(&url, &api_key, &body, headers, method.as_deref(), proxy_url.as_deref())?;
     let requests = state.0.clone();
     let mut active = state.0.lock().map_err(|_| "模型请求状态不可用".to_string())?;
     if active.contains_key(&request_id) {
@@ -96,11 +151,180 @@ mod model_http_tests {
     use std::io::{BufRead, BufReader, Read, Write};
     use std::net::TcpListener;
 
+    // 手动诊断：配置只从进程环境读取，绝不输出凭据、正文或原始服务端错误。
+    #[test]
+    #[ignore]
+    fn live_model_network_diagnostic() {
+        let config: Value = match std::env::var("APP_MODEL_DIAGNOSTIC_JSON") {
+            Ok(raw) => match serde_json::from_str(&raw) {
+                Ok(value) => value,
+                Err(_) => { println!("error=config"); return; }
+            },
+            Err(_) => return,
+        };
+        let Some(url) = config["url"].as_str() else { println!("error=config"); return; };
+        let key = config["apiKey"].as_str().unwrap_or("");
+        let body = match config["model"].as_str() {
+            Some(model) => json!({"model":model,"messages":[{"role":"user","content":"Reply with exactly OK"}],"stream":false,"max_tokens":64,"temperature":1.0}),
+            None => json!({}),
+        };
+        for proxy in [None, config["proxyUrl"].as_str()] {
+            let events = Arc::new(Mutex::new(Vec::<Value>::new()));
+            let captured = events.clone();
+            let channel = tauri::ipc::Channel::new(move |event| {
+                captured.lock().unwrap().push(event.deserialize().unwrap());
+                Ok(())
+            });
+            let headers = HashMap::from([
+                ("authorization".to_string(), format!("Bearer {key}")),
+                ("x-opencode-session".to_string(), "weekly-network-diagnostic".to_string()),
+            ]);
+            let result = match model_request(url, key, &body, Some(headers), Some("POST"), proxy) {
+                Ok(request) => tauri::async_runtime::block_on(stream_model_request(request.timeout(Duration::from_secs(30)), &channel)),
+                Err(_) => Err("configuration".to_string()),
+            };
+            let events = events.lock().unwrap();
+            let status = events.iter().find(|event| event["type"] == "headers").and_then(|event| event["status"].as_u64());
+            let bytes: Vec<u8> = events.iter().filter(|event| event["type"] == "chunk")
+                .flat_map(|event| serde_json::from_value::<Vec<u8>>(event["data"].clone()).unwrap()).collect();
+            let mut has_content = false;
+            let mut finish = "none";
+            if let Ok(value) = serde_json::from_slice::<Value>(&bytes) {
+                has_content = value["choices"][0]["message"]["content"].as_str().is_some_and(|text| !text.is_empty());
+                if let Some(reason) = value["choices"][0]["finish_reason"].as_str() {
+                    finish = match reason { "stop" => "stop", "length" => "length", "content_filter" => "content_filter", _ => "other" };
+                }
+            }
+            for line in String::from_utf8_lossy(&bytes).lines() {
+                if let Some(raw) = line.strip_prefix("data:") {
+                    if let Ok(value) = serde_json::from_str::<Value>(raw.trim()) {
+                        has_content |= value["choices"][0]["delta"]["content"].as_str().is_some_and(|text| !text.is_empty());
+                        if let Some(reason) = value["choices"][0]["finish_reason"].as_str() {
+                            finish = match reason { "stop" => "stop", "length" => "length", "content_filter" => "content_filter", _ => "other" };
+                        }
+                    }
+                }
+            }
+            let category = match result { Ok(()) => "none", Err(ref error) if error.contains("超时") => "timeout", Err(ref error) if error.contains("无法连接") => "connect", Err(_) => "network_or_config" };
+            println!("explicit_proxy={} status={status:?} hasContent={has_content} finishReason={finish} error={category}", proxy.is_some());
+        }
+    }
+
+    #[test]
+    fn rejects_invalid_proxy_addresses() {
+        for proxy in ["socks5://localhost:7897", "file:///secret", "invalid", "http://proxy.test/path", "http://proxy.test?key=secret"] {
+            let error = model_request("https://example.test", "", &json!({}), None, None, Some(proxy)).err().unwrap();
+            assert!(error.contains("代理"));
+            assert!(!error.contains("secret"));
+        }
+    }
+
+    #[test]
+    fn explicit_proxy_carries_get_and_post_with_headers_and_body() {
+        for method in ["GET", "POST"] {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let proxy = format!("http://{}", listener.local_addr().unwrap());
+            let server = std::thread::spawn(move || {
+                let (mut socket, _) = listener.accept().unwrap();
+                socket.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+                let mut reader = BufReader::new(&mut socket);
+                let mut first = String::new();
+                reader.read_line(&mut first).unwrap();
+                assert_eq!(first, format!("{method} http://provider.invalid/v1/models HTTP/1.1\r\n"));
+                let mut headers = String::new();
+                let mut length = 0;
+                loop {
+                    let mut line = String::new();
+                    assert!(reader.read_line(&mut line).unwrap() > 0);
+                    if line == "\r\n" { break; }
+                    if let Some(value) = line.to_lowercase().strip_prefix("content-length:") { length = value.trim().parse().unwrap(); }
+                    headers.push_str(&line.to_lowercase());
+                }
+                assert!(headers.contains("x-api-key: proxy-test-key\r\n"));
+                assert!(!headers.contains("authorization:"));
+                let mut body = vec![0; length];
+                reader.read_exact(&mut body).unwrap();
+                if method == "POST" { assert_eq!(serde_json::from_slice::<Value>(&body).unwrap(), json!({"model":"test"})); }
+                else { assert!(body.is_empty()); }
+                write!(socket, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK").unwrap();
+            });
+            let headers = HashMap::from([("x-api-key".to_string(), "proxy-test-key".to_string())]);
+            let request = model_request("http://provider.invalid/v1/models", "", &json!({"model":"test"}), Some(headers), Some(method), Some(&proxy)).unwrap();
+            let response = tauri::async_runtime::block_on(async { request.timeout(Duration::from_secs(5)).send().await.unwrap().text().await.unwrap() });
+            assert_eq!(response, "OK");
+            server.join().unwrap();
+        }
+    }
+
+    #[test]
+    fn rejects_unsupported_model_methods() {
+        for method in ["DELETE", "PATCH", "get", "", "POST\r\n"] {
+            assert!(model_request("https://example.test", "test", &json!({}), None, Some(method), None).is_err());
+        }
+        let request = model_request("https://example.test", "test", &json!({}), None, None, None).unwrap().build().unwrap();
+        assert_eq!(request.method(), reqwest::Method::POST);
+    }
+
+    #[test]
+    fn get_model_request_sends_headers_without_body() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/models", listener.local_addr().unwrap());
+        let server = std::thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+            let mut reader = BufReader::new(&mut socket);
+            let mut request_headers = String::new();
+            loop {
+                let mut line = String::new();
+                assert!(reader.read_line(&mut line).unwrap() > 0);
+                if line == "\r\n" { break; }
+                request_headers.push_str(&line);
+            }
+            let headers = request_headers.to_lowercase();
+            assert!(request_headers.starts_with("GET /models HTTP/1.1\r\n"));
+            assert!(headers.contains("x-api-key: discovery-key\r\n"));
+            assert!(!headers.contains("authorization:"));
+            assert!(!headers.contains("content-length:"));
+            assert!(!headers.contains("transfer-encoding:"));
+            assert!(reader.buffer().is_empty());
+            write!(socket, "HTTP/1.1 200 OK\r\nContent-Length: 11\r\nConnection: close\r\n\r\n{{\"data\":[]}}").unwrap();
+        });
+        let headers = HashMap::from([("x-api-key".to_string(), "discovery-key".to_string())]);
+        let request = model_request(&url, "unused", &json!({"ignored":true}), Some(headers), Some("GET"), None).unwrap();
+        let built = request.build().unwrap();
+        assert!(built.body().is_none());
+        let response = tauri::async_runtime::block_on(async {
+            reqwest::Client::new().execute(built).await.unwrap().text().await.unwrap()
+        });
+        assert_eq!(response, "{\"data\":[]}");
+        server.join().unwrap();
+    }
+
     #[test]
     fn rejects_non_http_model_endpoints() {
         for url in ["file:///secret", "ftp://example.com", "not a url"] {
-            assert!(model_request(url, "test", &json!({})).is_err());
+            assert!(model_request(url, "test", &json!({}), None, None, None).is_err());
         }
+    }
+
+    #[test]
+    fn custom_headers_replace_bearer_and_validate_at_native_boundary() {
+        let headers = HashMap::from([
+            ("X-Api-Key".to_string(), "test-key".to_string()),
+            ("x-opencode-session".to_string(), "report-id".to_string()),
+        ]);
+        let request = model_request("https://example.test/v1/messages", "unused", &json!({}), Some(headers), None, None).unwrap().build().unwrap();
+        assert_eq!(request.headers()["x-api-key"], "test-key");
+        assert_eq!(request.headers()["x-opencode-session"], "report-id");
+        assert!(!request.headers().contains_key("authorization"));
+        let no_auth = model_request("https://example.test", "unused", &json!({}), Some(HashMap::new()), None, None).unwrap().build().unwrap();
+        assert!(!no_auth.headers().contains_key("authorization"));
+        for (name, value) in [("Host", "evil"), ("X-Token", "secret\r\nHost: evil"), ("Content-Type", "text/plain")] {
+            let headers = HashMap::from([(name.to_string(), value.to_string())]);
+            assert!(model_request("https://example.test", "test", &json!({}), Some(headers), None, None).is_err());
+        }
+        let duplicate = HashMap::from([("X-Token".to_string(), "a".to_string()), ("x-token".to_string(), "b".to_string())]);
+        assert!(model_request("https://example.test", "test", &json!({}), Some(duplicate), None, None).is_err());
     }
 
     #[test]
@@ -130,7 +354,7 @@ mod model_http_tests {
             if value["type"] == "chunk" { sent.send(()).unwrap(); }
             Ok(())
         });
-        let request = model_request(&url, "test", &json!({})).unwrap();
+        let request = model_request(&url, "test", &json!({}), None, None, None).unwrap();
         let handle = tauri::async_runtime::spawn(async move {
             stream_model_request(request, &channel).await
         });
@@ -177,7 +401,7 @@ mod model_http_tests {
                 Ok(())
             });
             tauri::async_runtime::block_on(stream_model_request(
-                model_request(&url, "test", &json!({"model":"test"})).unwrap(), &channel,
+                model_request(&url, "test", &json!({"model":"test"}), None, None, None).unwrap(), &channel,
             )).unwrap();
             server.join().unwrap();
             let events = events.lock().unwrap();

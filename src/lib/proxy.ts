@@ -12,7 +12,7 @@ export function normalizeProxyUrl(raw?: string): string | undefined {
   return /^https?:\/\//i.test(v) ? v : `http://${v}`;
 }
 
-// 当前生效的代理；开关关闭时不指定代理，由系统网络设置决定（系统代理、环境变量代理会生效）
+// 当前生效的代理；开关关闭时不指定代理，使用各 HTTP 客户端的默认网络行为。
 export function activeProxy(s: ProxySettings): string | undefined {
   return s.proxyEnabled ? normalizeProxyUrl(s.proxyUrl) ?? DEFAULT_PROXY_URL : undefined;
 }

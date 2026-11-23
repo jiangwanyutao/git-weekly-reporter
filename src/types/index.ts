@@ -46,7 +46,7 @@ export interface Report {
 // glm    -> 智谱，使用 thinking:{type:'enabled'}
 // minimax-> MiniMax，使用 reasoning_split:true
 // openai -> 标准 OpenAI 兼容接口（自定义厂商默认）
-export type ProviderProtocol = 'glm' | 'minimax' | 'openai';
+export type ProviderProtocol = 'glm' | 'minimax' | 'openai' | 'responses' | 'anthropic' | 'gemini';
 
 export interface ModelProvider {
   id: string;
@@ -54,7 +54,11 @@ export interface ModelProvider {
   protocol: ProviderProtocol;
   apiKey: string;
   model: string;
-  baseUrl: string;         // 接口 base，会自动拼接 /chat/completions
+  baseUrl: string;
+  endpointMode?: 'base' | 'full'; // 旧配置：内置按 base，自定义按完整地址
+  authMode?: 'auto' | 'bearer' | 'api-key' | 'none';
+  customHeaders?: string; // JSON 对象；支持 {{apiKey}} 和 {{sessionId}}
+  customBody?: string;    // JSON 对象；null 删除默认可选参数
   builtin?: boolean;       // 内置(glm/minimax)不可删除、不可改协议/名称
 }
 
@@ -75,6 +79,6 @@ export interface AppSettings {
   notionParentPageId: string;
   notionSyncMode: 'append' | 'subpage';
   notionContentMode: 'markdown' | 'code';
-  proxyEnabled: boolean; // 本机代理开关：Notion 同步与检查更新共用
+  proxyEnabled: boolean; // 本机代理开关：桌面模型请求、Notion 同步与检查更新共用
   proxyUrl: string; // 代理地址，默认 Clash Verge 的 http://127.0.0.1:7897
 }

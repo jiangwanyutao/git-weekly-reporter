@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useMemo } from 'react';
 import { useAppStore } from '@/store';
 import { fetchGitLogs, getProjectContext, getProjectAuthors } from '@/lib/git';
 import { generateWeeklyReport, getActiveProvider, polishReport } from '@/lib/glm';
+import { validateProvider } from '@/lib/provider-config';
 import { aggregateCommits, formatForPrompt, sanitizeReport, withReportHeader, findJargon, reportShape } from '@/lib/commits';
 import { completeWorkSections } from '@/lib/report-format';
 import { syncReportToNotion } from '@/lib/notion';
@@ -187,10 +188,13 @@ export default function Dashboard() {
       toast({ title: '无法生成', description: '请至少勾选一条提交记录', variant: 'destructive' });
       return;
     }
-    if (!activeProvider?.apiKey) {
+    try {
+      if (!activeProvider) throw new Error('请先添加模型供应商');
+      if (activeProvider.apiKey !== 'MOCK') validateProvider(activeProvider);
+    } catch (error) {
       toast({
-        title: '未配置 API Key',
-        description: `请先在设置页为「${activeProvider?.name || '当前模型'}」配置 API Key`,
+        title: '模型配置不完整',
+        description: error instanceof Error ? error.message : '请检查模型设置',
         variant: 'destructive',
       });
       return;
@@ -202,6 +206,7 @@ export default function Dashboard() {
     setLastReport(null);
     setReasoning('');
     abortControllerRef.current = new AbortController();
+    const sessionId = crypto.randomUUID();
 
     try {
       // 步骤 1：读取项目背景（仅本次勾选涉及的项目）
@@ -245,7 +250,8 @@ export default function Dashboard() {
         projectContext,
         (chunk) => setGeneratedReport(chunk),
         (chunk) => setReasoning(chunk),
-        abortControllerRef.current.signal
+        abortControllerRef.current.signal,
+        sessionId
       );
       setStep('generation', { status: 'completed', details: `已生成 ${rawReport.length} 字` });
 
@@ -266,7 +272,7 @@ export default function Dashboard() {
           details: `发现 ${jargon.length} 处读者看不懂的词：${jargon.slice(0, 6).join('、')}${jargon.length > 6 ? ' 等' : ''}`,
         });
         try {
-          const polished = await polishReport(settings, cleaned, jargon, abortControllerRef.current.signal);
+          const polished = await polishReport(settings, cleaned, jargon, abortControllerRef.current.signal, sessionId);
           const cleanedPolished = sanitizeReport(polished);
           const left = findJargon(cleanedPolished);
           // 结构被改动或没改善，一律退回原稿——宁可留几个词，也不能把周报改坏
